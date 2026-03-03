@@ -1,0 +1,34 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const chatId = BigInt(id);
+
+        const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+
+        if (!chat) {
+            return NextResponse.json({ error: "Conversa não encontrada" }, { status: 404 });
+        }
+
+        const messages = await prisma.chatMessage.findMany({
+            where: { phone: chat.phone! },
+            orderBy: { created_at: "asc" },
+        });
+
+        const serialized = messages.map((msg) => ({
+            ...msg,
+            id: msg.id.toString(),
+            created_at: msg.created_at?.toISOString() || null,
+        }));
+
+        return NextResponse.json({ messages: serialized });
+    } catch (error) {
+        console.error("Erro ao buscar mensagens:", error);
+        return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    }
+}

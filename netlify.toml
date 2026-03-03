@@ -1,0 +1,2 @@
+[build.environment]
+  NEXT_DISABLE_NETLIFY_EDGE = "true"
