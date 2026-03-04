@@ -103,11 +103,20 @@ export async function POST(request: NextRequest) {
         return response;
     } catch (error) {
         console.error("Erro no login:", error);
+
+        let pwdLength = -1;
+        if (process.env.DATABASE_URL) {
+            const match = process.env.DATABASE_URL.match(/:([^:@]+)@/);
+            if (match && match[1]) {
+                pwdLength = match[1].length;
+            }
+        }
+
         return NextResponse.json(
             {
                 error: "Erro interno do servidor",
                 details: error instanceof Error ? error.message : String(error),
-                dbUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@') : 'no_db_url_found'
+                pwdLength
             },
             { status: 500 }
         );
