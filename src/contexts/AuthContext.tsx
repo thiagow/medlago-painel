@@ -55,11 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(data.user);
         sessionStorage.setItem("medlago_user", JSON.stringify(data.user));
 
+        // Bypass mandatory password change redirect
+        /*
         if (data.user.must_change_password) {
             router.push("/change-password");
         } else {
             router.push("/dashboard/conversations");
         }
+        */
+        router.push("/dashboard/conversations");
     }, [router]);
 
     const logout = useCallback(async () => {

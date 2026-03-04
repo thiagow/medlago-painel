@@ -32,14 +32,17 @@ async function main() {
 
     await prisma.user.upsert({
         where: { email: "admin@medlago.com" },
-        update: {},
+        update: {
+            password_hash: adminPassword,
+            must_change_password: false,
+        },
         create: {
             name: "Administrador",
             email: "admin@medlago.com",
             password_hash: adminPassword,
             role: "admin",
             active: true,
-            must_change_password: true,
+            must_change_password: false,
         },
     });
 
