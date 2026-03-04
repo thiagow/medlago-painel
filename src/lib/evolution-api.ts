@@ -13,7 +13,9 @@ export async function sendEvolutionMessage({
     number,
     text,
 }: SendMessageParams): Promise<void> {
-    const url = `${domain}/message/sendText/${instance}`;
+    // Remove barras finais do domain para evitar barra dupla na URL (ex: domain/ + /message = domain//message → 404)
+    const cleanDomain = domain.replace(/\/+$/, '');
+    const url = `${cleanDomain}/message/sendText/${instance}`;
 
     const response = await fetch(url, {
         method: "POST",
