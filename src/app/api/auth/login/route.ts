@@ -104,7 +104,11 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("Erro no login:", error);
         return NextResponse.json(
-            { error: "Erro interno do servidor", details: error instanceof Error ? error.message : String(error) },
+            {
+                error: "Erro interno do servidor",
+                details: error instanceof Error ? error.message : String(error),
+                dbUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@') : 'no_db_url_found'
+            },
             { status: 500 }
         );
     }
