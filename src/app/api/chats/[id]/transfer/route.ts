@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendTeamNotification } from "@/lib/evolution-api";
+import { sendTeamNotification, sendPatientTransferMessage } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
@@ -35,22 +35,11 @@ export async function POST(
             }
         });
 
-        // 2. Enviar mensagem de transferência ao paciente via Evolution API (Bot)
+        // 2. Enviar mensagem de transferência ao paciente via Evolution API
         try {
-            const EVO_DOMAIN = process.env.EVO_DOMAIN!.replace(/\/+$/, '');
-            const EVO_API_KEY = process.env.EVO_API_KEY!;
-            const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
-
-            await fetch(`${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_BOT}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", apikey: EVO_API_KEY },
-                body: JSON.stringify({
-                    number: phone,
-                    text: "Estamos transferindo o seu atendimento para um de nossos atendentes que logo em seguida irá entrar em contato!"
-                }),
-            });
+            await sendPatientTransferMessage(phone);
         } catch (evoErr) {
-            console.error("Erro ao notificar paciente via Evolution API:", evoErr);
+            console.error("Erro interno ao notificar paciente sobre transferência:", evoErr);
         }
 
         // 3. Notificar equipe via Evolution API (com credenciais do Bot agora)

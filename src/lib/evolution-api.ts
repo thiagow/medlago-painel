@@ -42,13 +42,21 @@ export async function sendPatientTransferMessage(
     const EVO_API_KEY = process.env.EVO_API_KEY!;
     const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
 
-    await sendEvolutionMessage({
-        domain: EVO_DOMAIN,
-        apiKey: EVO_API_KEY,
-        instance: EVO_INSTANCE_BOT,
-        number: phone,
-        text: "👤 Vou te transferir para um dos nossos atendentes agora. Em breve entrarão em contato com você. Obrigado pela paciência! 😊",
-    });
+    console.log(`Enviando mensagem de transferência para o paciente no número: ${phone}`);
+
+    try {
+        await sendEvolutionMessage({
+            domain: EVO_DOMAIN,
+            apiKey: EVO_API_KEY,
+            instance: EVO_INSTANCE_BOT,
+            number: phone,
+            text: "✅ *Atendimento Transferido*\n\nEstamos transferindo o seu atendimento para um de nossos atendentes. Eles entrarão em contato em instantes!",
+        });
+        console.log("Mensagem de transferência para paciente enviada com sucesso.");
+    } catch (error) {
+        console.error("Falha ao enviar mensagem de transferência para paciente:", error);
+        throw error;
+    }
 }
 
 // Notificar a equipe sobre nova transferência
