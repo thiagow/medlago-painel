@@ -42,15 +42,14 @@ export async function sendPatientTransferMessage(
     const EVO_API_KEY = process.env.EVO_API_KEY!;
     const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
 
-    const cleanPhone = phone.split('@')[0];
-    console.log(`Enviando mensagem de transferência para o paciente no número: ${cleanPhone} (original: ${phone})`);
+    console.log(`Enviando mensagem de transferência para o paciente no número original: ${phone}`);
 
     try {
         await sendEvolutionMessage({
             domain: EVO_DOMAIN,
             apiKey: EVO_API_KEY,
             instance: EVO_INSTANCE_BOT,
-            number: cleanPhone,
+            number: phone,
             text: "✅ *Atendimento Transferido*\n\nEstamos transferindo o seu atendimento para um de nossos atendentes. Eles entrarão em contato em instantes!",
         });
         console.log("Mensagem de transferência para paciente enviada com sucesso.");

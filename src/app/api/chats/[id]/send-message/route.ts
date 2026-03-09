@@ -26,7 +26,6 @@ export async function POST(
             const EVO_DOMAIN = process.env.EVO_DOMAIN!.replace(/\/+$/, '');
             const EVO_API_KEY = process.env.EVO_API_KEY!;
             const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
-            const cleanPhone = phone.split('@')[0];
 
             await fetch(`${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_BOT}`, {
                 method: "POST",
@@ -34,7 +33,7 @@ export async function POST(
                     "Content-Type": "application/json",
                     apikey: EVO_API_KEY,
                 },
-                body: JSON.stringify({ number: cleanPhone, text: message.trim() }),
+                body: JSON.stringify({ number: phone, text: message.trim() }),
             });
         } catch (evoErr) {
             console.error("Erro ao enviar via Evolution API:", evoErr);
