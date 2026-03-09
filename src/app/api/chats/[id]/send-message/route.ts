@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendHumanMessage } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
