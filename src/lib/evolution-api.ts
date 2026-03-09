@@ -61,18 +61,30 @@ export async function sendTeamNotification(
     const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
     const NUMERO_EQUIPE = process.env.NUMERO_EQUIPE!;
 
+    if (!NUMERO_EQUIPE) {
+        console.error("ERRO CRÍTICO: Variável de ambiente NUMERO_EQUIPE não está definida!");
+    } else {
+        console.log(`Enviando notificação para a equipe no número: ${NUMERO_EQUIPE}`);
+    }
+
     const cleanPhone = patientPhone.split('@')[0];
     const message = summary
         ? `🔔 *Nova solicitação de atendimento humano*\n\n📱 Paciente: ${cleanPhone}\n\n📝 Resumo: ${summary}`
         : `🔔 *Nova solicitação de atendimento humano*\n\n📱 Paciente: ${cleanPhone}\n\nPor favor, entre em contato com o paciente.`;
 
-    await sendEvolutionMessage({
-        domain: EVO_DOMAIN,
-        apiKey: EVO_API_KEY,
-        instance: EVO_INSTANCE_BOT,
-        number: NUMERO_EQUIPE,
-        text: message,
-    });
+    try {
+        await sendEvolutionMessage({
+            domain: EVO_DOMAIN,
+            apiKey: EVO_API_KEY,
+            instance: EVO_INSTANCE_BOT,
+            number: NUMERO_EQUIPE,
+            text: message,
+        });
+        console.log("Notificação para a equipe enviada com sucesso.");
+    } catch (error) {
+        console.error("Falha ao enviar notificação para a equipe:", error);
+        throw error; // Re-throw para ser pego pela rota
+    }
 }
 
 
