@@ -72,8 +72,8 @@ export async function POST(request: NextRequest) {
             name: user.name,
         };
 
-        const accessToken = generateAccessToken(payload);
-        const refreshToken = generateRefreshToken(payload);
+        const accessToken = await generateAccessToken(payload);
+        const refreshToken = await generateRefreshToken(payload);
 
         const response = NextResponse.json({
             user: {

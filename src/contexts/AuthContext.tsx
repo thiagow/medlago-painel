@@ -60,10 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.user.must_change_password) {
             router.push("/change-password");
         } else {
-            router.push("/dashboard/conversations");
+            router.push("/dashboard");
         }
         */
-        router.push("/dashboard/conversations");
+        router.push("/dashboard");
     }, [router]);
 
     const logout = useCallback(async () => {

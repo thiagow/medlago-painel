@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAccessToken } from "@/lib/auth";
+import { verifyAccessToken } from "@/lib/jwt";
 
 // Rotas que não precisam de auth
 const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/refresh"];
@@ -7,7 +7,7 @@ const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/refresh"];
 // Rotas que precisam de role admin
 const ADMIN_ROUTES = ["/dashboard/users", "/api/users"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Permitir rotas públicas
@@ -27,7 +27,7 @@ export function middleware(request: NextRequest) {
         return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
 
     if (!payload) {
         if (!pathname.startsWith("/api/")) {

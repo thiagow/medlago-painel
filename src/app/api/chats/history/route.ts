@@ -5,9 +5,10 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const search = searchParams.get("search") || "";
-        const status = searchParams.get("status") || "";
+        const startDate = searchParams.get("startDate");
+        const endDate = searchParams.get("endDate");
         const page = parseInt(searchParams.get("page") || "1");
-        const limit = parseInt(searchParams.get("limit") || "10");
+        const limit = parseInt(searchParams.get("limit") || "50");
         const skip = (page - 1) * limit;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,8 +18,15 @@ export async function GET(request: NextRequest) {
             where.phone = { contains: search };
         }
 
-        if (status && (status === "active" || status === "paused")) {
-            where.ai_service = status;
+        if (startDate && endDate) {
+            // Fim do dia para o endDate
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            where.created_at = {
+                gte: new Date(startDate),
+                lte: end,
+            };
         }
 
         const [chats, total] = await Promise.all([
@@ -47,7 +55,7 @@ export async function GET(request: NextRequest) {
             totalPages: Math.ceil(total / limit),
         });
     } catch (error) {
-        console.error("Erro ao listar chats:", error);
+        console.error("Erro ao listar histórico:", error);
         return NextResponse.json(
             { error: "Erro interno do servidor" },
             { status: 500 }

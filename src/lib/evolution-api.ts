@@ -57,42 +57,24 @@ export async function sendTeamNotification(
     summary?: string
 ): Promise<void> {
     const EVO_DOMAIN = process.env.EVO_DOMAIN!;
-    const EVO_API_KEY_HUMANO = process.env.EVO_API_KEY_HUMANO!;
-    const EVO_INSTANCE_HUMANO =
-        process.env.EVO_INSTANCE_HUMANO || "medlago_humano_prod";
+    const EVO_API_KEY = process.env.EVO_API_KEY!;
+    const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
     const NUMERO_EQUIPE = process.env.NUMERO_EQUIPE!;
 
+    const cleanPhone = patientPhone.split('@')[0];
     const message = summary
-        ? `🔔 *Nova solicitação de atendimento humano*\n\n📱 Paciente: ${patientPhone}\n\n📝 Resumo: ${summary}`
-        : `🔔 *Nova solicitação de atendimento humano*\n\n📱 Paciente: ${patientPhone}\n\nPor favor, entre em contato com o paciente.`;
+        ? `🔔 *Nova solicitação de atendimento humano*\n\n📱 Paciente: ${cleanPhone}\n\n📝 Resumo: ${summary}`
+        : `🔔 *Nova solicitação de atendimento humano*\n\n📱 Paciente: ${cleanPhone}\n\nPor favor, entre em contato com o paciente.`;
 
     await sendEvolutionMessage({
         domain: EVO_DOMAIN,
-        apiKey: EVO_API_KEY_HUMANO,
-        instance: EVO_INSTANCE_HUMANO,
+        apiKey: EVO_API_KEY,
+        instance: EVO_INSTANCE_BOT,
         number: NUMERO_EQUIPE,
         text: message,
     });
 }
 
-// Enviar mensagem do atendente humano para o paciente
-export async function sendHumanMessage(
-    phone: string,
-    message: string
-): Promise<void> {
-    const EVO_DOMAIN = process.env.EVO_DOMAIN!;
-    const EVO_API_KEY_HUMANO = process.env.EVO_API_KEY_HUMANO!;
-    const EVO_INSTANCE_HUMANO =
-        process.env.EVO_INSTANCE_HUMANO || "medlago_humano_prod";
-
-    await sendEvolutionMessage({
-        domain: EVO_DOMAIN,
-        apiKey: EVO_API_KEY_HUMANO,
-        instance: EVO_INSTANCE_HUMANO,
-        number: phone,
-        text: message,
-    });
-}
 
 // Enviar mensagem de reativação da IA
 export async function sendReactivationMessage(phone: string): Promise<void> {

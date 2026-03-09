@@ -9,6 +9,8 @@ import {
     Users,
     LogOut,
     MessageSquareHeart,
+    Clock,
+    LayoutDashboard,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -36,10 +38,22 @@ export default function DashboardLayout({
 
     const navItems = [
         {
+            href: "/dashboard",
+            icon: LayoutDashboard,
+            label: "Visão Geral",
+            id: "nav-overview",
+        },
+        {
             href: "/dashboard/conversations",
             icon: MessageSquare,
             label: "Conversas",
             id: "nav-conversations",
+        },
+        {
+            href: "/dashboard/history",
+            icon: Clock,
+            label: "Histórico",
+            id: "nav-history",
         },
         ...(isAdmin()
             ? [
@@ -75,8 +89,8 @@ export default function DashboardLayout({
                                 id={id}
                                 href={href}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${isActive
-                                        ? "bg-blue-600/20 text-blue-400 font-medium"
-                                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                                    ? "bg-blue-600/20 text-blue-400 font-medium"
+                                    : "text-slate-400 hover:text-white hover:bg-slate-800"
                                     }`}
                             >
                                 <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-blue-400" : "text-slate-400 group-hover:text-white"}`} />

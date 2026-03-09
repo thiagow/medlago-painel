@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-    sendPatientTransferMessage,
-    sendTeamNotification,
-} from "@/lib/evolution-api";
+import { sendTeamNotification } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
@@ -12,6 +9,11 @@ export async function POST(
     try {
         const { id } = await params;
         const chatId = BigInt(id);
+        const { reason, summary } = await request.json();
+
+        if (!reason || !summary) {
+            return NextResponse.json({ error: "Motivo e resumo são obrigatórios" }, { status: 400 });
+        }
 
         const chat = await prisma.chat.findUnique({ where: { id: chatId } });
         if (!chat || !chat.phone) {
@@ -20,23 +22,46 @@ export async function POST(
 
         const phone = chat.phone;
 
-        // 1. Enviar mensagem de transferência ao paciente via Evolution API
+        // Obter usuário logado do token via Headers (injetados pelo middleware)
+        const userName = request.headers.get("x-user-name") || "Sistema";
+
+        // 1. Gravar Log no Banco de Dados
+        await prisma.chatTransferLog.create({
+            data: {
+                chat_id: chatId,
+                user_name: userName,
+                reason,
+                summary
+            }
+        });
+
+        // 2. Enviar mensagem de transferência ao paciente via Evolution API (Bot)
         try {
-            await sendPatientTransferMessage(phone);
+            const EVO_DOMAIN = process.env.EVO_DOMAIN!.replace(/\/+$/, '');
+            const EVO_API_KEY = process.env.EVO_API_KEY!;
+            const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
+
+            await fetch(`${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_BOT}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: EVO_API_KEY },
+                body: JSON.stringify({
+                    number: phone,
+                    text: "Estamos transferindo o seu atendimento para um de nossos atendentes que logo em seguida irá entrar em contato!"
+                }),
+            });
         } catch (evoErr) {
             console.error("Erro ao notificar paciente via Evolution API:", evoErr);
         }
 
-        // 2. Notificar equipe via Evolution API
+        // 3. Notificar equipe via Evolution API (com credenciais do Bot agora)
         try {
-            await sendTeamNotification(phone);
+            await sendTeamNotification(phone, summary);
         } catch (evoErr) {
             console.error("Erro ao notificar equipe via Evolution API:", evoErr);
         }
 
-        // 3. Pausar IA: ai_service = 'paused', updated_at = NOW() + 24h
+        // 4. Pausar IA
         const pauseUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
         await prisma.chat.update({
             where: { id: chatId },
             data: {
@@ -45,7 +70,7 @@ export async function POST(
             },
         });
 
-        // 4. Desativar mensagens ativas do telefone
+        // 5. Desativar mensagens ativas do telefone
         await prisma.chatMessage.updateMany({
             where: { phone },
             data: { active: false },

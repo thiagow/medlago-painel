@@ -8,13 +8,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Refresh token não encontrado" }, { status: 401 });
     }
 
-    const payload = verifyRefreshToken(refreshToken);
+    const payload = await verifyRefreshToken(refreshToken);
 
     if (!payload) {
         return NextResponse.json({ error: "Refresh token inválido ou expirado" }, { status: 401 });
     }
 
-    const newAccessToken = generateAccessToken({
+    const newAccessToken = await generateAccessToken({
         userId: payload.userId,
         email: payload.email,
         role: payload.role,

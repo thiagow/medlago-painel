@@ -1,19 +1,10 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { NextRequest } from "next/server";
 import { prisma } from "./prisma";
+import { JWTPayload, verifyAccessToken, verifyRefreshToken, generateAccessToken, generateRefreshToken } from "./jwt";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "8h";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
-
-export interface JWTPayload {
-    userId: string;
-    email: string;
-    role: string;
-    name: string;
-}
+export type { JWTPayload };
+export { verifyAccessToken, verifyRefreshToken, generateAccessToken, generateRefreshToken };
 
 // Hash de senha
 export async function hashPassword(password: string): Promise<string> {
@@ -27,35 +18,6 @@ export async function verifyPassword(
     return bcrypt.compare(password, hash);
 }
 
-// JWT Tokens
-export function generateAccessToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_SECRET, {
-        expiresIn: JWT_EXPIRES_IN,
-    } as jwt.SignOptions);
-}
-
-export function generateRefreshToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_REFRESH_SECRET, {
-        expiresIn: JWT_REFRESH_EXPIRES_IN,
-    } as jwt.SignOptions);
-}
-
-export function verifyAccessToken(token: string): JWTPayload | null {
-    try {
-        return jwt.verify(token, JWT_SECRET) as JWTPayload;
-    } catch {
-        return null;
-    }
-}
-
-export function verifyRefreshToken(token: string): JWTPayload | null {
-    try {
-        return jwt.verify(token, JWT_REFRESH_SECRET) as JWTPayload;
-    } catch {
-        return null;
-    }
-}
-
 // Extrair usuário autenticado do request
 export async function getAuthUser(
     request: NextRequest
@@ -67,7 +29,7 @@ export async function getAuthUser(
 
         if (!token) return null;
 
-        const payload = verifyAccessToken(token);
+        const payload = await verifyAccessToken(token);
         if (!payload) return null;
 
         // Verificar se usuário ainda existe e está ativo

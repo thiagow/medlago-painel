@@ -1,0 +1,215 @@
+{
+  "env": {
+    "EVO_DOMAIN": "https://api.tiait.com.br/",
+    "EVO_INSTANCE_BOT": "clinicaMedLago",
+    "EVO_INSTANCE_HUMANO": "ThiagoTesteMedlago",
+    "NUMERO_EQUIPE": "5562992234093",
+    "urlBugada": "https://api.tiait.com.br//message/sendText/ThiagoTesteMedlago",
+    "urlCorrigida": "https://api.tiait.com.br/message/sendText/ThiagoTesteMedlago",
+    "temBarraDupla": true
+  },
+  "tests": {
+    "instancias_bot": {
+      "url": "https://api.tiait.com.br/instance/fetchInstances",
+      "status": 200,
+      "ok": true,
+      "response": [
+        {
+          "id": "1e07f265-d5e1-47cc-a15c-8707d2de6212",
+          "name": "clinicaMedLago",
+          "connectionStatus": "open",
+          "ownerJid": "556181409241@s.whatsapp.net",
+          "profileName": "CooperX IA",
+          "profilePicUrl": "https://pps.whatsapp.net/v/t61.24694-24/546471740_1299040212262321_7109276281104928968_n.jpg?ccb=11-4&oh=01_Q5Aa3wEo26GYa6Ykn0XshP--jXG2FhS8BBxALTQ2J3G8d0X1Ug&oe=69B551A0&_nc_sid=5e03e0&_nc_cat=108",
+          "integration": "WHATSAPP-BAILEYS",
+          "number": "5561981402881",
+          "businessId": null,
+          "token": "E8AC27FE8EDD-4AB7-BC78-F5E1914772BA",
+          "clientName": "evolution",
+          "disconnectionReasonCode": 401,
+          "disconnectionObject": "{\"error\":{\"data\":{\"tag\":\"stream:error\",\"attrs\":{\"code\":\"401\"},\"content\":[{\"tag\":\"conflict\",\"attrs\":{\"type\":\"device_removed\"}}]},\"isBoom\":true,\"isServer\":false,\"output\":{\"statusCode\":401,\"payload\":{\"statusCode\":401,\"error\":\"Unauthorized\",\"message\":\"Stream Errored (conflict)\"},\"headers\":{}}},\"date\":\"2026-01-12T21:37:47.759Z\"}",
+          "disconnectionAt": "2026-01-12T21:37:47.761Z",
+          "createdAt": "2025-08-07T11:41:56.903Z",
+          "updatedAt": "2026-03-04T13:26:13.151Z",
+          "Chatwoot": {
+            "id": "cmmb8exoqdhdwru4kub6gkmws",
+            "enabled": true,
+            "accountId": "1",
+            "token": "6LNL6oVDiaXgHkBtLEnDb2yr",
+            "url": "https://chat.tiait.com.br",
+            "nameInbox": "medlago",
+            "signMsg": false,
+            "signDelimiter": null,
+            "number": null,
+            "reopenConversation": false,
+            "conversationPending": false,
+            "mergeBrazilContacts": false,
+            "importContacts": true,
+            "importMessages": true,
+            "daysLimitImportMessages": 10,
+            "organization": "",
+            "logo": "",
+            "ignoreJids": [],
+            "createdAt": "2026-03-03T23:21:23.211Z",
+            "updatedAt": "2026-03-03T23:23:14.315Z",
+            "instanceId": "1e07f265-d5e1-47cc-a15c-8707d2de6212"
+          },
+          "Proxy": null,
+          "Rabbitmq": null,
+          "Nats": null,
+          "Sqs": null,
+          "Websocket": null,
+          "Setting": {
+            "id": "cme1bu9m700648de57ealr7dj",
+            "rejectCall": false,
+            "msgCall": "",
+            "groupsIgnore": true,
+            "alwaysOnline": false,
+            "readMessages": true,
+            "readStatus": false,
+            "syncFullHistory": false,
+            "wavoipToken": null,
+            "createdAt": "2025-08-07T11:41:56.911Z",
+            "updatedAt": "2026-01-12T21:33:44.586Z",
+            "instanceId": "1e07f265-d5e1-47cc-a15c-8707d2de6212"
+          },
+          "_count": {
+            "Message": 2200,
+            "Contact": 847,
+            "Chat": 22
+          }
+        }
+      ]
+    },
+    "instancias_humano": {
+      "url": "https://api.tiait.com.br/instance/fetchInstances",
+      "status": 200,
+      "ok": true,
+      "response": [
+        {
+          "id": "ac956149-de61-4e7e-a1f0-0751de0ca131",
+          "name": "ThiagoTesteMedlago",
+          "connectionStatus": "open",
+          "ownerJid": "556292234093@s.whatsapp.net",
+          "profileName": "Thiago",
+          "profilePicUrl": "https://pps.whatsapp.net/v/t61.24694-24/474611403_1178707353840740_47914804864899784_n.jpg?ccb=11-4&oh=01_Q5Aa3wFCzTD7PevRXBSFQCxTEHvkzXCdSQbOeWgkDTkFEGphHQ&oe=69B4D256&_nc_sid=5e03e0&_nc_cat=104",
+          "integration": "WHATSAPP-BAILEYS",
+          "number": "62992234093",
+          "businessId": null,
+          "token": "306F2B17C164-448B-A050-F8E62F9DDA7B",
+          "clientName": "evolution",
+          "disconnectionReasonCode": null,
+          "disconnectionObject": null,
+          "disconnectionAt": null,
+          "createdAt": "2026-03-02T16:14:44.712Z",
+          "updatedAt": "2026-03-04T06:29:27.777Z",
+          "Chatwoot": null,
+          "Proxy": null,
+          "Rabbitmq": null,
+          "Nats": null,
+          "Sqs": null,
+          "Websocket": null,
+          "Setting": {
+            "id": "cmm9dqf3gbowyru4kfidohnb7",
+            "rejectCall": false,
+            "msgCall": "",
+            "groupsIgnore": true,
+            "alwaysOnline": false,
+            "readMessages": false,
+            "readStatus": false,
+            "syncFullHistory": false,
+            "wavoipToken": "",
+            "createdAt": "2026-03-02T16:14:44.716Z",
+            "updatedAt": "2026-03-02T16:15:03.446Z",
+            "instanceId": "ac956149-de61-4e7e-a1f0-0751de0ca131"
+          },
+          "_count": {
+            "Message": 46993,
+            "Contact": 54,
+            "Chat": 3067
+          }
+        }
+      ]
+    },
+    "envio_url_corrigida": {
+      "url": "https://api.tiait.com.br/message/sendText/ThiagoTesteMedlago",
+      "status": 201,
+      "ok": true,
+      "response": {
+        "key": {
+          "remoteJid": "556292234093@s.whatsapp.net",
+          "fromMe": true,
+          "id": "3EB0CA7B2C6B775E0DCE99"
+        },
+        "pushName": "Você",
+        "status": "PENDING",
+        "message": {
+          "conversation": "Teste diagnostico MedLago"
+        },
+        "contextInfo": {
+          "mentionedJid": [],
+          "groupMentions": [],
+          "ephemeralSettingTimestamp": {
+            "low": 1772461707,
+            "high": 0,
+            "unsigned": false
+          },
+          "disappearingMode": {
+            "initiator": 0
+          }
+        },
+        "messageType": "conversation",
+        "messageTimestamp": 1772634507,
+        "instanceId": "ac956149-de61-4e7e-a1f0-0751de0ca131",
+        "source": "web"
+      }
+    },
+    "envio_url_bugada": {
+      "url": "https://api.tiait.com.br//message/sendText/ThiagoTesteMedlago",
+      "status": 404,
+      "ok": false,
+      "response": {
+        "status": 404,
+        "error": "Not Found",
+        "response": {
+          "message": [
+            "Cannot POST //message/sendText/ThiagoTesteMedlago"
+          ]
+        }
+      }
+    },
+    "envio_bot": {
+      "url": "https://api.tiait.com.br/message/sendText/clinicaMedLago",
+      "status": 201,
+      "ok": true,
+      "response": {
+        "key": {
+          "remoteJid": "556292234093@s.whatsapp.net",
+          "fromMe": true,
+          "id": "3EB0504A19835EFAA92F14"
+        },
+        "pushName": "Você",
+        "status": "PENDING",
+        "message": {
+          "conversation": "Teste diagnostico bot"
+        },
+        "contextInfo": {
+          "mentionedJid": [],
+          "groupMentions": [],
+          "ephemeralSettingTimestamp": {
+            "low": 1772461709,
+            "high": 0,
+            "unsigned": false
+          },
+          "disappearingMode": {
+            "initiator": 0
+          }
+        },
+        "messageType": "conversation",
+        "messageTimestamp": 1772634509,
+        "instanceId": "1e07f265-d5e1-47cc-a15c-8707d2de6212",
+        "source": "web"
+      }
+    }
+  }
+}
