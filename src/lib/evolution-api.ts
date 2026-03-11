@@ -15,13 +15,13 @@ export async function sendEvolutionMessage({
 }: SendMessageParams): Promise<void> {
     // Remove barras finais do domain para evitar barra dupla na URL (ex: domain/ + /message = domain//message → 404)
     const cleanDomain = domain.replace(/\/+$/, '');
-    const url = `${cleanDomain}/message/sendText/${instance}`;
+    const url = `${cleanDomain}/send/text`;
 
     const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            apikey: apiKey,
+            token: apiKey,
         },
         body: JSON.stringify({ number, text }),
     });
@@ -38,7 +38,7 @@ export async function sendEvolutionMessage({
 export async function sendPatientTransferMessage(
     phone: string
 ): Promise<void> {
-    const EVO_DOMAIN = process.env.EVO_DOMAIN!;
+    const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
     const EVO_API_KEY = process.env.EVO_API_KEY!;
     const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
 
@@ -64,7 +64,7 @@ export async function sendTeamNotification(
     patientPhone: string,
     summary?: string
 ): Promise<void> {
-    const EVO_DOMAIN = process.env.EVO_DOMAIN!;
+    const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
     const EVO_API_KEY = process.env.EVO_API_KEY!;
     const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
     const NUMERO_EQUIPE = process.env.NUMERO_EQUIPE!;
@@ -98,7 +98,7 @@ export async function sendTeamNotification(
 
 // Enviar mensagem de reativação da IA
 export async function sendReactivationMessage(phone: string): Promise<void> {
-    const EVO_DOMAIN = process.env.EVO_DOMAIN!;
+    const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
     const EVO_API_KEY = process.env.EVO_API_KEY!;
     const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
 

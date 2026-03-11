@@ -25,9 +25,9 @@ console.log(`   NUMERO_EQUIPE: "${NUMERO_EQUIPE}"`);
 console.log();
 
 // 2. Verificar URL gerada
-const urlAtual = `${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+const urlAtual = `${EVO_DOMAIN}/send/text`;
 const domainTrimmed = EVO_DOMAIN.replace(/\/+$/, '');
-const urlCorrigida = `${domainTrimmed}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+const urlCorrigida = `${domainTrimmed}/send/text`;
 
 console.log("2. URLs GERADAS:");
 console.log(`   URL ATUAL (bug):    "${urlAtual}"`);
@@ -46,7 +46,7 @@ async function testInstance(instance: string, apiKey: string, label: string) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': apiKey,
+                'token': apiKey,
             },
         });
         console.log(`   Status: ${response.status}`);
@@ -77,7 +77,7 @@ async function testInstance(instance: string, apiKey: string, label: string) {
 async function testSendMessage() {
     console.log("4. TESTE DE ENVIO DE MENSAGEM (URL corrigida):");
 
-    const url = `${domainTrimmed}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+    const url = `${domainTrimmed}/send/text`;
     const testNumber = NUMERO_EQUIPE;
     const testText = "🧪 Teste de diagnóstico - Evolution API MedLago - pode ignorar";
 
@@ -91,7 +91,7 @@ async function testSendMessage() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': EVO_API_KEY_HUMANO,
+                'token': EVO_API_KEY_HUMANO,
             },
             body: JSON.stringify({
                 number: testNumber,
@@ -115,7 +115,7 @@ async function testSendMessage() {
 
     // Teste com URL BUGADA (barra dupla) para comparar
     console.log("5. TESTE DE ENVIO COM URL BUGADA (barra dupla):");
-    const urlBugada = `${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+    const urlBugada = `${EVO_DOMAIN}/send/text`;
     console.log(`   URL: ${urlBugada}`);
 
     try {
@@ -123,7 +123,7 @@ async function testSendMessage() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': EVO_API_KEY_HUMANO,
+                'token': EVO_API_KEY_HUMANO,
             },
             body: JSON.stringify({
                 number: testNumber,

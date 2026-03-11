@@ -18,8 +18,8 @@ async function main() {
     console.log("NUMERO_EQUIPE:", JSON.stringify(NUMERO_EQUIPE));
     console.log("");
 
-    const urlBugada = `${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_HUMANO}`;
-    const urlCorrigida = `${domainTrimmed}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+    const urlBugada = `${EVO_DOMAIN}/send/text`;
+    const urlCorrigida = `${domainTrimmed}/send/text`;
     console.log("URL ATUAL (possivel bug):", urlBugada);
     console.log("URL CORRIGIDA:", urlCorrigida);
     console.log("Tem barra dupla?:", urlBugada.includes('//message'));
@@ -32,7 +32,7 @@ async function main() {
         console.log("URL:", url);
         const res = await fetch(url, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json', 'apikey': EVO_API_KEY },
+            headers: { 'Content-Type': 'application/json', 'token': EVO_API_KEY },
         });
         console.log("Status:", res.status);
         const text = await res.text();
@@ -49,7 +49,7 @@ async function main() {
         console.log("URL:", url);
         const res = await fetch(url, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json', 'apikey': EVO_API_KEY_HUMANO },
+            headers: { 'Content-Type': 'application/json', 'token': EVO_API_KEY_HUMANO },
         });
         console.log("Status:", res.status);
         const text = await res.text();
@@ -62,13 +62,13 @@ async function main() {
     // Teste 3: Envio com URL CORRIGIDA
     console.log("--- TESTE 3: Envio com URL CORRIGIDA ---");
     try {
-        const url = `${domainTrimmed}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+        const url = `${domainTrimmed}/send/text`;
         console.log("URL:", url);
         const body = { number: NUMERO_EQUIPE, text: "Teste diagnostico - Evolution API MedLago" };
         console.log("Body:", JSON.stringify(body));
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': EVO_API_KEY_HUMANO },
+            headers: { 'Content-Type': 'application/json', 'token': EVO_API_KEY_HUMANO },
             body: JSON.stringify(body),
         });
         console.log("Status:", res.status);
@@ -82,12 +82,12 @@ async function main() {
     // Teste 4: Envio com URL BUGADA (barra dupla)
     console.log("--- TESTE 4: Envio com URL BUGADA (barra dupla) ---");
     try {
-        const url = `${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_HUMANO}`;
+        const url = `${EVO_DOMAIN}/send/text`;
         console.log("URL:", url);
         const body = { number: NUMERO_EQUIPE, text: "Teste diagnostico bugado" };
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': EVO_API_KEY_HUMANO },
+            headers: { 'Content-Type': 'application/json', 'token': EVO_API_KEY_HUMANO },
             body: JSON.stringify(body),
         });
         console.log("Status:", res.status);
@@ -101,12 +101,12 @@ async function main() {
     // Teste 5: Envio com instancia BOT
     console.log("--- TESTE 5: Envio com instancia BOT ---");
     try {
-        const url = `${domainTrimmed}/message/sendText/${EVO_INSTANCE_BOT}`;
+        const url = `${domainTrimmed}/send/text`;
         console.log("URL:", url);
         const body = { number: NUMERO_EQUIPE, text: "Teste diagnostico bot" };
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': EVO_API_KEY },
+            headers: { 'Content-Type': 'application/json', 'token': EVO_API_KEY },
             body: JSON.stringify(body),
         });
         console.log("Status:", res.status);

@@ -23,15 +23,14 @@ export async function POST(
 
         // 1. Enviar mensagem via Evolution API (instância bot)
         try {
-            const EVO_DOMAIN = process.env.EVO_DOMAIN!.replace(/\/+$/, '');
+            const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
             const EVO_API_KEY = process.env.EVO_API_KEY!;
-            const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
 
-            await fetch(`${EVO_DOMAIN}/message/sendText/${EVO_INSTANCE_BOT}`, {
+            await fetch(`${EVO_DOMAIN}/send/text`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    apikey: EVO_API_KEY,
+                    token: EVO_API_KEY,
                 },
                 body: JSON.stringify({ number: phone, text: message.trim() }),
             });
