@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Bot, UserCheck, Calendar } from "lucide-react";
+import { Search, Bot, UserCheck, Calendar, CheckCircle, ArrowRightLeft } from "lucide-react";
 
 interface Chat {
     id: string;
@@ -63,12 +63,47 @@ export default function HistoryPage() {
         }
     };
 
-    const isAiActive = (service: string | null | undefined) => {
-        if (!service) return false;
-        const s = String(service).toLowerCase();
-        return s === "active" || s === "true";
-    };
+    const renderStatusBadge = (service: string | null) => {
+        const s = String(service || "").toLowerCase();
 
+        if (s === "active" || s === "true") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <Bot className="w-3.5 h-3.5" />
+                    Ativa
+                </span>
+            );
+        }
+        if (s === "paused") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    Humano
+                </span>
+            );
+        }
+        if (s === "transferred") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                    Transferido
+                </span>
+            );
+        }
+        if (s === "finished") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Finalizado
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                Desconhecido
+            </span>
+        );
+    };
     return (
         <div className="flex flex-col h-full overflow-hidden bg-slate-950 p-6 md:p-8 max-w-7xl mx-auto w-full">
             <div className="mb-8">
@@ -146,17 +181,7 @@ export default function HistoryPage() {
                                         <div className="font-medium text-white">{formatPhone(chat.phone)}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        {isAiActive(chat.ai_service) ? (
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                                <Bot className="w-3.5 h-3.5" />
-                                                Ativa
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                                                <UserCheck className="w-3.5 h-3.5" />
-                                                Pausada
-                                            </span>
-                                        )}
+                                        {renderStatusBadge(chat.ai_service)}
                                     </td>
                                 </tr>
                             ))}

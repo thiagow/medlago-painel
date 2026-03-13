@@ -15,6 +15,7 @@ import {
     MessageSquare,
     RefreshCw,
     Filter,
+    CheckCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -26,6 +27,7 @@ interface Chat {
     conversation_id: string | null;
     created_at: string | null;
     updated_at: string | null;
+    last_message_at: string | null;
 }
 
 interface Message {
@@ -61,7 +63,8 @@ function ConversationsContent() {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [transferring, setTransferring] = useState(false);
     const [reactivating, setReactivating] = useState(false);
-    const [showConfirm, setShowConfirm] = useState<"transfer" | "reactivate" | null>(null);
+    const [finishing, setFinishing] = useState(false);
+    const [showConfirm, setShowConfirm] = useState<"transfer" | "reactivate" | "finish" | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const [transferReason, setTransferReason] = useState("");
@@ -185,13 +188,15 @@ function ConversationsContent() {
             });
             if (!res.ok) throw new Error();
 
-            toast.success("Conversa transferida para humano!");
+            toast.success("Conversa transferida para equipe!");
             setShowConfirm(null);
             setTransferReason("");
             setTransferSummary("");
 
-            setSelectedChat((prev) => prev ? { ...prev, ai_service: "paused" } : null);
-            setChats((prev) => prev.map((c) => c.id === selectedChat.id ? { ...c, ai_service: "paused" } : c));
+            // Remover chat da lista (transferidos não aparecem mais)
+            setChats((prev) => prev.filter((c) => c.id !== selectedChat.id));
+            setSelectedChat(null);
+            setMessages([]);
         } catch {
             toast.error("Erro ao transferir conversa");
         } finally {
@@ -267,6 +272,33 @@ function ConversationsContent() {
         return s === "active" || s === "true";
     };
 
+    const getStatusInfo = (service: string | null | undefined) => {
+        const s = String(service || "").toLowerCase();
+        if (s === "active" || s === "true") return { label: "IA Ativa", emoji: "🟢", color: "bg-emerald-500", badgeClass: "bg-emerald-500/15 text-emerald-400" };
+        if (s === "paused") return { label: "Atendimento Humano", emoji: "🟠", color: "bg-amber-500", badgeClass: "bg-amber-500/15 text-amber-400" };
+        return { label: "Desconhecido", emoji: "⚪", color: "bg-slate-500", badgeClass: "bg-slate-500/15 text-slate-400" };
+    };
+
+    const handleFinish = async () => {
+        if (!selectedChat) return;
+        setFinishing(true);
+        setShowConfirm(null);
+        try {
+            const res = await fetch(`/api/chats/${selectedChat.id}/finish`, { method: "POST" });
+            if (!res.ok) throw new Error();
+            toast.success("Atendimento finalizado com sucesso!");
+
+            // Remover chat da lista (finalizados não aparecem mais)
+            setChats((prev) => prev.filter((c) => c.id !== selectedChat.id));
+            setSelectedChat(null);
+            setMessages([]);
+        } catch {
+            toast.error("Erro ao finalizar atendimento");
+        } finally {
+            setFinishing(false);
+        }
+    };
+
     const openTransferModal = () => {
         setTransferReason("");
         setTransferSummary("");
@@ -280,7 +312,7 @@ function ConversationsContent() {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
                         <h3 className="text-white font-semibold text-lg mb-2">
-                            {showConfirm === "transfer" ? "Transferir para Equipe?" : "Reativar IA?"}
+                            {showConfirm === "transfer" ? "Transferir para Equipe?" : showConfirm === "finish" ? "Finalizar Atendimento?" : "Reativar IA?"}
                         </h3>
 
                         {showConfirm === "transfer" ? (
@@ -306,6 +338,10 @@ function ConversationsContent() {
                                     />
                                 </div>
                             </div>
+                        ) : showConfirm === "finish" ? (
+                            <p className="text-slate-400 text-sm mb-6 mt-2">
+                                O atendimento será finalizado e a conversa será movida para o histórico.
+                            </p>
                         ) : (
                             <p className="text-slate-400 text-sm mb-6 mt-2">
                                 A IA será reativada e o paciente será informado.
@@ -317,14 +353,16 @@ function ConversationsContent() {
                                 Cancelar
                             </button>
                             <button
-                                onClick={showConfirm === "transfer" ? handleTransfer : handleReactivate}
-                                disabled={(showConfirm === "transfer" && (!transferReason.trim() || !transferSummary.trim())) || transferring || reactivating}
+                                onClick={showConfirm === "transfer" ? handleTransfer : showConfirm === "finish" ? handleFinish : handleReactivate}
+                                disabled={(showConfirm === "transfer" && (!transferReason.trim() || !transferSummary.trim())) || transferring || reactivating || finishing}
                                 className={`flex-1 py-2.5 rounded-xl text-white font-medium transition-all text-sm disabled:opacity-50 ${showConfirm === "transfer"
                                     ? "bg-amber-600 hover:bg-amber-500"
+                                    : showConfirm === "finish"
+                                    ? "bg-red-600 hover:bg-red-500"
                                     : "bg-green-600 hover:bg-green-500"
                                     }`}
                             >
-                                {showConfirm === "transfer" ? (transferring ? "Enviando..." : "Confirmar") : (reactivating ? "Reativando..." : "Confirmar")}
+                                {showConfirm === "transfer" ? (transferring ? "Enviando..." : "Confirmar") : showConfirm === "finish" ? (finishing ? "Finalizando..." : "Confirmar") : (reactivating ? "Reativando..." : "Confirmar")}
                             </button>
                         </div>
                     </div>
@@ -386,11 +424,11 @@ function ConversationsContent() {
                                 >
                                     <div className="flex items-start justify-between mb-1">
                                         <span className="font-medium text-slate-200 text-sm">{formatPhone(chat.phone)}</span>
-                                        <span className="text-[10px] text-slate-500">{formatDate(chat.updated_at)}</span>
+                                        <span className="text-[10px] text-slate-500">{formatDate(chat.last_message_at || chat.updated_at)}</span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-2">
-                                        <span className={`w-2 h-2 rounded-full ${isAiActive(chat.ai_service) ? "bg-emerald-500" : "bg-red-500"}`} />
-                                        <span className="text-xs text-slate-400">{isAiActive(chat.ai_service) ? "IA Ativa" : "IA Pausada"}</span>
+                                        <span className={`w-2 h-2 rounded-full ${getStatusInfo(chat.ai_service).color}`} />
+                                        <span className="text-xs text-slate-400">{getStatusInfo(chat.ai_service).label}</span>
                                     </div>
                                 </div>
                             ))}
@@ -416,11 +454,8 @@ function ConversationsContent() {
                                 </div>
                                 <div>
                                     <p className="text-sm font-semibold text-white">{formatPhone(selectedChat.phone)}</p>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${isAiActive(selectedChat.ai_service)
-                                        ? "bg-emerald-500/15 text-emerald-400"
-                                        : "bg-red-500/15 text-red-400"
-                                        }`}>
-                                        {isAiActive(selectedChat.ai_service) ? "🟢 IA Ativa" : "🔴 IA Pausada"}
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service).badgeClass}`}>
+                                        {getStatusInfo(selectedChat.ai_service).emoji} {getStatusInfo(selectedChat.ai_service).label}
                                     </span>
                                 </div>
                             </div>
@@ -436,15 +471,26 @@ function ConversationsContent() {
                                     <RefreshCw className="w-4 h-4" />
                                 </button>
                                 {!isAiActive(selectedChat.ai_service) ? (
-                                    <button
-                                        id="btn-reactivate-ai"
-                                        onClick={() => setShowConfirm("reactivate")}
-                                        disabled={reactivating}
-                                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
-                                    >
-                                        <Bot className="w-4 h-4" />
-                                        <span className="hidden sm:block">Reativar IA</span>
-                                    </button>
+                                    <>
+                                        <button
+                                            id="btn-reactivate-ai"
+                                            onClick={() => setShowConfirm("reactivate")}
+                                            disabled={reactivating}
+                                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                        >
+                                            <Bot className="w-4 h-4" />
+                                            <span className="hidden sm:block">Reativar IA</span>
+                                        </button>
+                                        <button
+                                            id="btn-finish-chat"
+                                            onClick={() => setShowConfirm("finish")}
+                                            disabled={finishing}
+                                            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                        >
+                                            <CheckCircle className="w-4 h-4" />
+                                            <span className="hidden sm:block">Finalizar</span>
+                                        </button>
+                                    </>
                                 ) : (
                                     <button
                                         id="btn-transfer-human"
