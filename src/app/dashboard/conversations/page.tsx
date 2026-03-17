@@ -16,6 +16,14 @@ import {
     RefreshCw,
     Filter,
     CheckCircle,
+    Paperclip,
+    FileText,
+    Image as ImageIcon,
+    FileAudio,
+    X,
+    Loader2,
+    Mic,
+    Square
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -28,6 +36,9 @@ interface Chat {
     created_at: string | null;
     updated_at: string | null;
     last_message_at: string | null;
+    assigned_to: string | null;
+    assigned_user_name: string | null;
+    department_name: string | null;
 }
 
 interface Message {
@@ -38,6 +49,9 @@ interface Message {
     user_message: string | null;
     active: boolean | null;
     created_at: string | null;
+    media_url?: string | null;
+    media_type?: string | null;
+    media_name?: string | null;
 }
 
 export default function ConversationsPage() {
@@ -56,36 +70,119 @@ function ConversationsContent() {
     const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
+    const [tab, setTab] = useState<"ai" | "waiting" | "human">("ai");
     const [messageInput, setMessageInput] = useState("");
     const [loadingChats, setLoadingChats] = useState(true);
     const [loadingMessages, setLoadingMessages] = useState(false);
+    
+    // States Paginação Infinite Scroll
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+
     const [sendingMessage, setSendingMessage] = useState(false);
     const [transferring, setTransferring] = useState(false);
     const [reactivating, setReactivating] = useState(false);
+    const [assuming, setAssuming] = useState(false);
     const [finishing, setFinishing] = useState(false);
     const [showConfirm, setShowConfirm] = useState<"transfer" | "reactivate" | "finish" | null>(null);
+    const [waitingCount, setWaitingCount] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
     const [transferReason, setTransferReason] = useState("");
     const [transferSummary, setTransferSummary] = useState("");
+    const [transferType, setTransferType] = useState<"human" | "external">("human");
+    const [departments, setDepartments] = useState<any[]>([]);
+    const [selectedDepartment, setSelectedDepartment] = useState("");
+    const [externalContacts, setExternalContacts] = useState<any[]>([]);
+    const [selectedExternalContact, setSelectedExternalContact] = useState("");
+    
+    // States Mídia
+    const [attachment, setAttachment] = useState<File | null>(null);
+    const [uploadingMedia, setUploadingMedia] = useState(false);
 
-    const fetchChats = useCallback(async () => {
+    // States Áudio
+    const [isRecording, setIsRecording] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const fetchChats = useCallback(async (currentPage: number, isPolling = false) => {
+        if (!isPolling && currentPage > 1) {
+            setLoadingMore(true);
+        } else if (!isPolling && currentPage === 1) {
+            setLoadingChats(true);
+        }
+
         try {
             const params = new URLSearchParams();
             if (search) params.set("search", search);
-            if (statusFilter) params.set("status", statusFilter);
+            params.set("tab", tab);
+            
+            // Tratamento especial para polling:
+            // Para não perder a visão das conversas velhas que rolaram, 
+            // no polling buscamos desde a pagina 1 até a última visível
+            if (isPolling) {
+                params.set("page", "1");
+                params.set("limit", (currentPage * 20).toString());
+            } else {
+                params.set("page", currentPage.toString());
+                params.set("limit", "20");
+            }
 
             const res = await fetch(`/api/chats?${params.toString()}&_t=${Date.now()}`, { cache: "no-store" });
             if (!res.ok) return;
             const data = await res.json();
-            setChats(data.chats || []);
+            
+            const fetchedChats = data.chats || [];
+
+            if (isPolling || currentPage === 1) {
+                setChats(fetchedChats);
+            } else {
+                setChats(prev => {
+                    // Evitar duplicados (embora db mude, garantimos uniqueness por ID)
+                    const existingIds = new Set(prev.map(c => c.id));
+                    const novosUnicos = fetchedChats.filter((c: Chat) => !existingIds.has(c.id));
+                    return [...prev, ...novosUnicos];
+                });
+            }
+
+            // Descobrir se há mais se a chamada retornou a mesma quantidade do limit (20)
+            if (!isPolling) {
+                setHasMore(fetchedChats.length === 20);
+            }
+
         } catch (err) {
             console.error("Erro ao buscar chats:", err);
         } finally {
-            setLoadingChats(false);
+            if (!isPolling && currentPage > 1) {
+                setLoadingMore(false);
+            } else if (!isPolling && currentPage === 1) {
+                setLoadingChats(false);
+            }
         }
-    }, [search, statusFilter]);
+    }, [search, tab]);
+
+    // Reseta página e chats quando os filtros mudam
+    useEffect(() => {
+        setPage(1);
+        setHasMore(true);
+        fetchChats(1, false);
+    }, [search, tab, fetchChats]);
+
+    const loadMoreChats = useCallback(() => {
+        if (!loadingMore && !loadingChats && hasMore) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            fetchChats(nextPage, false);
+        }
+    }, [page, hasMore, loadingMore, loadingChats, fetchChats]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const bottom = e.currentTarget.scrollHeight - e.currentTarget.scrollTop <= e.currentTarget.clientHeight + 20;
+        if (bottom) {
+            loadMoreChats();
+        }
+    };
 
     const fetchMessages = useCallback(async (chatId: string, background = false) => {
         if (!background) setLoadingMessages(true);
@@ -122,12 +219,36 @@ function ConversationsContent() {
         return () => clearInterval(interval);
     }, [selectedChat?.id, fetchMessages]);
 
-    // Polling a cada 30 segundos para lista lateral
+    // Polling a cada 30 segundos para lista lateral (preserva abrangência da página atual)
     useEffect(() => {
-        fetchChats();
-        const interval = setInterval(fetchChats, 30000);
+        const interval = setInterval(() => {
+            fetchChats(page, true);
+        }, 30000);
         return () => clearInterval(interval);
-    }, [fetchChats]);
+    }, [fetchChats, page]);
+
+    // Polling a cada 15 segundos para contagem de chats em espera
+    const fetchWaitingCount = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/chats/count?_t=${Date.now()}`, { cache: "no-store" });
+            if (!res.ok) return;
+            const data = await res.json();
+            setWaitingCount(data.waiting ?? 0);
+        } catch {
+            // Silencia erros de rede para não poluir o console
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchWaitingCount();
+        const interval = setInterval(fetchWaitingCount, 15000);
+        return () => clearInterval(interval);
+    }, [fetchWaitingCount]);
+
+    // Zera badge quando usuário navega para a aba Em Espera
+    useEffect(() => {
+        if (tab === "waiting") setWaitingCount(0);
+    }, [tab]);
 
     // Resgate individual de chat passado via Parâmetro /dashboard/conversations?chatId=X
     useEffect(() => {
@@ -163,6 +284,17 @@ function ConversationsContent() {
         }
     }, [selectedChat?.id]); // Rola suave quando troca de chat e carrega pela primeira vez
 
+    // Fetch Departaments e Contatos Externos para o Modal
+    useEffect(() => {
+        fetch("/api/departments").then(res => res.json()).then(data => {
+            if (data.departments) setDepartments(data.departments.filter((d: any) => d.active));
+        }).catch(err => console.error(err));
+        
+        fetch("/api/external-contacts").then(res => res.json()).then(data => {
+            if (data.externalContacts) setExternalContacts(data.externalContacts.filter((e: any) => e.active));
+        }).catch(err => console.error(err));
+    }, []);
+
     const handleSelectChat = (chat: Chat) => {
         if (selectedChat?.id === chat.id) return;
         setSelectedChat(chat);
@@ -175,6 +307,14 @@ function ConversationsContent() {
             toast.error("Preencha o motivo e resumo");
             return;
         }
+        if (transferType === "human" && !selectedDepartment) {
+            toast.error("Selecione um departamento.");
+            return;
+        }
+        if (transferType === "external" && !selectedExternalContact) {
+            toast.error("Selecione um contato externo.");
+            return;
+        }
 
         setTransferring(true);
         try {
@@ -183,17 +323,18 @@ function ConversationsContent() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     reason: transferReason.trim(),
-                    summary: transferSummary.trim()
+                    summary: transferSummary.trim(),
+                    transfer_type: transferType,
+                    department_id: transferType === "human" ? selectedDepartment : undefined,
+                    external_contact_id: transferType === "external" ? selectedExternalContact : undefined
                 })
             });
             if (!res.ok) throw new Error();
 
-            toast.success("Conversa transferida para equipe!");
+            toast.success(transferType === "human" ? "Conversa transferida para equipe!" : "Atendimento transferido!");
             setShowConfirm(null);
-            setTransferReason("");
-            setTransferSummary("");
 
-            // Remover chat da lista (transferidos não aparecem mais)
+            // Remover chat da lista local para forçar o recarregamento natural ou esconder
             setChats((prev) => prev.filter((c) => c.id !== selectedChat.id));
             setSelectedChat(null);
             setMessages([]);
@@ -222,20 +363,78 @@ function ConversationsContent() {
         }
     };
 
+    const handleAssume = async () => {
+        if (!selectedChat) return;
+        setAssuming(true);
+        try {
+            const res = await fetch(`/api/chats/${selectedChat.id}/assume`, { method: "POST" });
+            if (!res.ok) throw new Error();
+            toast.success("Atendimento assumido com sucesso!");
+            // Move o chat para aba "Humano"
+            setChats((prev) => prev.filter((c) => c.id !== selectedChat.id));
+            setSelectedChat(null);
+            setMessages([]);
+            setTab("human");
+        } catch {
+            toast.error("Erro ao assumir atendimento");
+        } finally {
+            setAssuming(false);
+        }
+    };
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedChat || !messageInput.trim()) return;
+        if (!selectedChat || (!messageInput.trim() && !attachment)) return;
         setSendingMessage(true);
-        try {
-            const res = await fetch(`/api/chats/${selectedChat.id}/send-message`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: messageInput.trim() }),
-            });
-            if (!res.ok) throw new Error();
-            const data = await res.json();
+        setUploadingMedia(true);
 
-            setMessages((prev) => [...prev, data.message]);
+        try {
+            // 1. Se tem anexo — converte para base64 e envia direto (URL R2 é privada e Uazapi não acessa)
+            if (attachment) {
+                // Determinar tipo de mídia pelo MIME type
+                let mediaType = "document";
+                if (attachment.type.startsWith("image/")) mediaType = "image";
+                else if (attachment.type.startsWith("audio/")) mediaType = "audio";
+                else if (attachment.type.startsWith("video/")) mediaType = "video";
+
+                // Conversão para base64
+                const arrayBuffer = await attachment.arrayBuffer();
+                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                const base64Url = `data:${attachment.type};base64,${base64}`;
+
+                const res = await fetch(`/api/chats/${selectedChat.id}/send-media`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        mediaUrl: base64Url,
+                        mediaType,
+                        fileName: attachment.name,
+                        caption: messageInput.trim() || undefined
+                    }),
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `Erro no envio de mídia (${res.status})`);
+                }
+                const data = await res.json();
+                if (data.warning) toast(data.warning, { icon: "⚠️" });
+                setMessages((prev) => [...prev, data.message]);
+                setAttachment(null);
+
+            } else {
+                // Mensagem de texto normal
+                const res = await fetch(`/api/chats/${selectedChat.id}/send-message`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: messageInput.trim() }),
+                });
+
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                setMessages((prev) => [...prev, data.message]);
+            }
+
             setMessageInput("");
 
             // Pausar UI (o backend já pausou a IA localmente sem transferir à equipe)
@@ -244,10 +443,12 @@ function ConversationsContent() {
 
             // Rola pro fim
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-        } catch {
-            toast.error("Erro ao enviar mensagem");
+        } catch (err: any) {
+            console.error("Erro ao enviar mensagem:", err);
+            toast.error(err?.message || "Erro ao enviar mensagem");
         } finally {
             setSendingMessage(false);
+            setUploadingMedia(false);
         }
     };
 
@@ -302,7 +503,44 @@ function ConversationsContent() {
     const openTransferModal = () => {
         setTransferReason("");
         setTransferSummary("");
+        setTransferType("human");
+        setSelectedDepartment("");
+        setSelectedExternalContact("");
         setShowConfirm("transfer");
+    };
+
+    // ── Gravação de Áudio ──────────────────────────────
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) audioChunksRef.current.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+                setAttachment(audioFile);
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (err) {
+            console.error('Erro ao acessar microfone:', err);
+            toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
     };
 
     return (
@@ -317,6 +555,60 @@ function ConversationsContent() {
 
                         {showConfirm === "transfer" ? (
                             <div className="space-y-4 mb-6 mt-4">
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="transfer_type"
+                                            value="human"
+                                            checked={transferType === "human"}
+                                            onChange={() => setTransferType("human")}
+                                            className="w-4 h-4 text-amber-500 bg-slate-800 border-slate-600 focus:ring-amber-500"
+                                        />
+                                        Equipe (Atendente)
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="transfer_type"
+                                            value="external"
+                                            checked={transferType === "external"}
+                                            onChange={() => setTransferType("external")}
+                                            className="w-4 h-4 text-amber-500 bg-slate-800 border-slate-600 focus:ring-amber-500"
+                                        />
+                                        Contato Externo
+                                    </label>
+                                </div>
+                                {transferType === "human" && (
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-400 mb-1 block">Departamento</label>
+                                        <select
+                                            value={selectedDepartment}
+                                            onChange={e => setSelectedDepartment(e.target.value)}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                        >
+                                            <option value="">Selecione um departamento</option>
+                                            {departments.map(d => (
+                                                <option key={d.id} value={d.id}>{d.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                {transferType === "external" && (
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-400 mb-1 block">Contato Externo</label>
+                                        <select
+                                            value={selectedExternalContact}
+                                            onChange={e => setSelectedExternalContact(e.target.value)}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                        >
+                                            <option value="">Selecione um contato</option>
+                                            {externalContacts.map(e => (
+                                                <option key={e.id} value={e.id}>{e.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="text-xs font-medium text-slate-400 mb-1 block">Motivo da Transferência</label>
                                     <input
@@ -332,7 +624,7 @@ function ConversationsContent() {
                                     <textarea
                                         value={transferSummary}
                                         onChange={e => setTransferSummary(e.target.value)}
-                                        placeholder="Breve resumo para o humano que vai assumir..."
+                                        placeholder="Breve resumo para o responsável que vai assumir..."
                                         rows={3}
                                         className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
                                     />
@@ -389,19 +681,45 @@ function ConversationsContent() {
                                 className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                             />
                         </div>
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
-                        >
-                            <option value="all">Todos os status</option>
-                            <option value="active">🟢 IA Ativa</option>
-                            <option value="paused">🔴 IA Pausada</option>
-                        </select>
+                        <div className="flex gap-1 p-1 bg-slate-800 rounded-xl">
+                            <button
+                                onClick={() => { setTab("ai"); setPage(1); setHasMore(true); }}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    tab === "ai" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"
+                                }`}
+                            >
+                                Atend. IA
+                            </button>
+                            <button
+                                onClick={() => { setTab("waiting"); setPage(1); setHasMore(true); }}
+                                className={`flex-1 relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    tab === "waiting"
+                                        ? "bg-orange-600 text-white shadow"
+                                        : waitingCount > 0
+                                        ? "text-orange-400 hover:text-white animate-pulse bg-orange-500/10"
+                                        : "text-slate-400 hover:text-white"
+                                }`}
+                            >
+                                Em Espera
+                                {waitingCount > 0 && tab !== "waiting" && (
+                                    <span className="absolute -top-1.5 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-lg shadow-red-500/40 border border-slate-800">
+                                        {waitingCount > 99 ? "99+" : waitingCount}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => { setTab("human"); setPage(1); setHasMore(true); }}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    tab === "human" ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"
+                                }`}
+                            >
+                                Humano
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto" onScroll={handleScroll}>
                     {loadingChats ? (
                         <div className="flex items-center justify-center h-32">
                             <span className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
@@ -426,12 +744,22 @@ function ConversationsContent() {
                                         <span className="font-medium text-slate-200 text-sm">{formatPhone(chat.phone)}</span>
                                         <span className="text-[10px] text-slate-500">{formatDate(chat.last_message_at || chat.updated_at)}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <span className={`w-2 h-2 rounded-full ${getStatusInfo(chat.ai_service).color}`} />
+                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                        <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusInfo(chat.ai_service).color}`} />
                                         <span className="text-xs text-slate-400">{getStatusInfo(chat.ai_service).label}</span>
+                                        {chat.assigned_user_name && (
+                                            <span className="ml-auto text-[11px] text-amber-400/80 font-medium truncate max-w-[100px]">
+                                                {chat.assigned_user_name}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    {loadingMore && (
+                        <div className="flex items-center justify-center p-4">
+                            <span className="w-5 h-5 border-2 border-slate-500/30 border-t-slate-500 rounded-full animate-spin" />
                         </div>
                     )}
                 </div>
@@ -454,9 +782,21 @@ function ConversationsContent() {
                                 </div>
                                 <div>
                                     <p className="text-sm font-semibold text-white">{formatPhone(selectedChat.phone)}</p>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service).badgeClass}`}>
-                                        {getStatusInfo(selectedChat.ai_service).emoji} {getStatusInfo(selectedChat.ai_service).label}
-                                    </span>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service).badgeClass}`}>
+                                            {getStatusInfo(selectedChat.ai_service).emoji} {getStatusInfo(selectedChat.ai_service).label}
+                                        </span>
+                                        {selectedChat.assigned_user_name && (
+                                            <span className="text-xs text-amber-400/80 font-medium">
+                                                Atendente: {selectedChat.assigned_user_name}
+                                            </span>
+                                        )}
+                                        {selectedChat.department_name && (
+                                            <span className="text-xs text-violet-400/80">
+                                                [{selectedChat.department_name}]
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -470,16 +810,28 @@ function ConversationsContent() {
                                 >
                                     <RefreshCw className="w-4 h-4" />
                                 </button>
-                                {!isAiActive(selectedChat.ai_service) ? (
+                                {selectedChat.ai_service === "waiting" ? (
+                                    // Em Espera: apenas botão Assumir
+                                    <button
+                                        id="btn-assume-chat"
+                                        onClick={handleAssume}
+                                        disabled={assuming}
+                                        className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                    >
+                                        <UserCheck className="w-4 h-4" />
+                                        <span className="hidden sm:block">{assuming ? "Assumindo..." : "Assumir Atendimento"}</span>
+                                    </button>
+                                ) : selectedChat.ai_service === "paused" ? (
+                                    // Atendimento Humano ativo: Transferir + Finalizar (sem Reativar IA)
                                     <>
                                         <button
-                                            id="btn-reactivate-ai"
-                                            onClick={() => setShowConfirm("reactivate")}
-                                            disabled={reactivating}
-                                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                            id="btn-transfer-department"
+                                            onClick={openTransferModal}
+                                            disabled={transferring}
+                                            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
                                         >
-                                            <Bot className="w-4 h-4" />
-                                            <span className="hidden sm:block">Reativar IA</span>
+                                            <UserCheck className="w-4 h-4" />
+                                            <span className="hidden sm:block">Transferir</span>
                                         </button>
                                         <button
                                             id="btn-finish-chat"
@@ -492,6 +844,7 @@ function ConversationsContent() {
                                         </button>
                                     </>
                                 ) : (
+                                    // IA ativa: Transferir para Humano
                                     <button
                                         id="btn-transfer-human"
                                         onClick={openTransferModal}
@@ -517,16 +870,32 @@ function ConversationsContent() {
                                     <span className="text-sm">Nenhuma mensagem ainda</span>
                                 </div>
                             ) : (
-                                messages.map((msg) => {
+                                (messages.map((msg, index) => {
                                     const isInactive = msg.active === false;
 
                                     return (
-                                        <div key={msg.id} className="flex flex-col gap-2">
+                                        <div key={`${msg.id}-${index}`} className="flex flex-col gap-2">
                                             {/* Mensagem do usuário/lead (vem da tabela e aparece à esquerda como Slate) */}
                                             {msg.user_message && (
                                                 <div className="flex justify-start">
                                                     <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm transition-opacity bg-slate-800 text-slate-100 rounded-bl-sm ${isInactive ? "opacity-40" : ""}`}>
-                                                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.user_message}</p>
+                                                        {msg.media_url && (
+                                                            <div className="mb-2">
+                                                                {msg.media_type === "image" ? (
+                                                                    <img src={msg.media_url} alt="Mídia Recebida" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.media_url!, '_blank')} />
+                                                                ) : msg.media_type === "audio" ? (
+                                                                    <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left" />
+                                                                ) : (
+                                                                    <a href={msg.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-blue-400 no-underline transition-colors shrink-0">
+                                                                        <FileText className="w-4 h-4" />
+                                                                        <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo Recebido"}</span>
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {msg.user_message && (
+                                                            <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.user_message}</p>
+                                                        )}
                                                         <div className="flex items-center gap-1.5 mt-1 justify-start">
                                                             <span className="text-[10px] text-slate-500">
                                                                 {formatDate(msg.created_at)}
@@ -542,11 +911,54 @@ function ConversationsContent() {
                                                 </div>
                                             )}
 
-                                            {/* Mensagem da IA / Atendente (vem da tabela e aparece à direita como Azul) */}
+                                            {/* Mídia recebida do paciente SEM texto (audio, video, imagem direta do WhatsApp) */}
+                                            {msg.media_url && !msg.user_message && !msg.bot_message && (
+                                                <div className="flex justify-start">
+                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm transition-opacity bg-slate-800 text-slate-100 rounded-bl-sm ${isInactive ? "opacity-40" : ""}`}>
+                                                        <div className="mb-1">
+                                                            {msg.media_type === "image" ? (
+                                                                <img src={msg.media_url} alt="Mídia Recebida" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.media_url!, '_blank')} />
+                                                            ) : msg.media_type === "audio" ? (
+                                                                <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left" />
+                                                            ) : msg.media_type === "video" ? (
+                                                                <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48" />
+                                                            ) : (
+                                                                <a href={msg.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-blue-400 no-underline transition-colors shrink-0">
+                                                                    <FileText className="w-4 h-4" />
+                                                                    <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo Recebido"}</span>
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 mt-1 justify-start">
+                                                            <span className="text-[10px] text-slate-500">{formatDate(msg.created_at)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Mensagem da IA / Atendente (direita, azul) — só aparece se tiver bot_message */}
                                             {msg.bot_message && (
                                                 <div className="flex justify-end">
                                                     <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm transition-opacity bg-blue-600 text-white rounded-br-sm ${isInactive ? "opacity-40" : ""}`}>
-                                                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.bot_message}</p>
+                                                        {msg.media_url && (
+                                                            <div className="mb-2">
+                                                                {msg.media_type === "image" ? (
+                                                                    <img src={msg.media_url} alt="Mídia Enviada" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.media_url!, '_blank')} />
+                                                                ) : msg.media_type === "audio" ? (
+                                                                    <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left" />
+                                                                ) : msg.media_type === "video" ? (
+                                                                    <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48" />
+                                                                ) : (
+                                                                    <a href={msg.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-lg text-blue-100 no-underline transition-colors shrink-0">
+                                                                        <FileText className="w-4 h-4" />
+                                                                        <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo Enviado"}</span>
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {msg.bot_message && (
+                                                            <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.bot_message}</p>
+                                                        )}
                                                         <div className="flex items-center gap-1.5 mt-1 justify-end">
                                                             <span className="text-[10px] text-blue-200/70">
                                                                 {formatDate(msg.created_at)}
@@ -563,30 +975,82 @@ function ConversationsContent() {
                                             )}
                                         </div>
                                     );
-                                })
+                                }))
                             )}
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Send Message */}
-                        <div className="border-t border-slate-800 p-4 bg-slate-900 shrink-0">
-                            <form onSubmit={handleSendMessage} className="flex gap-3">
+                        {/* Send Message Area */}
+                        <div className="border-t border-slate-800 flex flex-col bg-slate-900 shrink-0">
+                            {/* Preview anexo */}
+                            {attachment && (
+                                <div className="px-4 pt-3 flex items-center gap-3">
+                                    <div className="relative bg-slate-800 p-2 rounded-lg border border-slate-700 flex items-center gap-3">
+                                        <div className="p-2 bg-blue-500/10 rounded-md">
+                                            {attachment.type.startsWith("image/") ? <ImageIcon className="w-5 h-5 text-blue-400" /> 
+                                            : attachment.type.startsWith("audio/") ? <FileAudio className="w-5 h-5 text-amber-400" />
+                                            : <FileText className="w-5 h-5 text-indigo-400" />}
+                                        </div>
+                                        <div className="flex flex-col max-w-[200px]">
+                                            <span className="text-sm font-medium text-slate-200 truncate">{attachment.name}</span>
+                                            <span className="text-xs text-slate-500">{(attachment.size / 1024).toFixed(1)} KB</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setAttachment(null)} 
+                                            className="absolute -top-2 -right-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-full p-1"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Forms Message */}
+                            <form onSubmit={handleSendMessage} className="p-4 flex gap-3 items-center">
+                                {/* Upload hidden */}
+                                <input 
+                                    type="file" 
+                                    ref={fileInputRef} 
+                                    className="hidden" 
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            setAttachment(e.target.files[0]);
+                                        }
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    title="Anexar arquivo ou imagem"
+                                    className="p-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+                                >
+                                    <Paperclip className="w-5 h-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={isRecording ? stopRecording : startRecording}
+                                    title={isRecording ? "Parar gravação" : "Gravar áudio"}
+                                    className={`p-3 rounded-xl transition-all ${isRecording ? "bg-red-600 text-white animate-pulse" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                >
+                                    {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                                </button>
+
                                 <input
                                     id="message-input"
                                     type="text"
                                     value={messageInput}
                                     onChange={(e) => setMessageInput(e.target.value)}
-                                    placeholder="Digite sua mensagem..."
+                                    placeholder={attachment ? "Digite uma legenda (opcional)..." : "Digite sua mensagem..."}
                                     disabled={sendingMessage}
                                     className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
                                 />
                                 <button
                                     id="btn-send-message"
                                     type="submit"
-                                    disabled={sendingMessage || !messageInput.trim()}
+                                    disabled={sendingMessage || (!messageInput.trim() && !attachment)}
                                     className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all disabled:opacity-60 flex items-center gap-2"
                                 >
-                                    <Send className="w-4 h-4" />
+                                    {uploadingMedia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                 </button>
                             </form>
                         </div>

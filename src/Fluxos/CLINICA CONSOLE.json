@@ -1,0 +1,2133 @@
+{
+  "name": "CLINICA CONSOLE",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2656,
+        1616
+      ],
+      "id": "5af01579-fde5-476e-a1d7-0851c9d0669a",
+      "name": "inputTest",
+      "webhookId": "8b8fc783-f576-4ac7-9e83-8942f7b1a3a3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "94127c6c-e9ab-4ead-a5ab-e3fbebf4fc71",
+              "name": "query",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "0b8a8ff0-1ff9-45ba-9c4e-27bb639f6f37",
+              "name": "identifier",
+              "value": "=test-n8n:{{ $json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "08017764-9c23-48fe-a8a6-1f863606f0eb",
+              "name": "telefone",
+              "value": "telefone de teste aqui",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2368,
+        1616
+      ],
+      "id": "c07b848e-332b-4315-bcfe-b1f7df199b76",
+      "name": "trataDados"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "identifier"
+            },
+            {
+              "name": "telefone"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2336,
+        1920
+      ],
+      "id": "c6eec101-76fe-4dd2-b36e-a11f2783d5bc",
+      "name": "recebeDadosExternos"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -2000,
+        1632
+      ],
+      "id": "6acd60a1-c804-48f9-b67c-033ac4f18da2",
+      "name": "agrupaDados"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -1456,
+        1952
+      ],
+      "id": "98a247b7-f904-423b-bcfc-fb66db1c731e",
+      "name": "openai4.1Mini",
+      "credentials": {
+        "openAiApi": {
+          "id": "iqtbz71A05CuNmUB",
+          "name": "Key OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('agrupaDados').item.json.query }}",
+        "options": {
+          "systemMessage": "# SYSTEM MESSAGE: AGENTE_ROTEADOR — MedLago\n\n## 1. Identidade e Contexto\n- **Função:** Atuar como o cérebro central da clínica no primeiro contato, identificando a intenção do paciente e decidindo qual especialista (tool) deve atendê-lo.\n- **Nome de Apresentação (quando aplicável):** Lilian Recepcionista Virtual\n- **Cargo:** Recepcionista da Clínica MedLago\n- **Data Referência:** {{ $now.format('dd/MM/yyyy') }}\n- **Idioma:** Português do Brasil\n- **Personalidade:** Solícita, clara e objetiva. Invisível após o roteamento.\n\n---\n\n## 2. MAPEAMENTO DE ROTEAMENTO (Ferramentas de Agentes)\n\n### A. Agente de Informações e FAQ (Tool: `agente_faq`)\n- **Objetivo:** Responder informações institucionais e administrativas consultando o banco de dados em tempo real.\n- **Quando rotear — EXCLUSIVAMENTE este agente para:**\n  - ✅ Especialidades atendidas na clínica (\"Tem cardiologista?\", \"Atende ortopedia?\")\n  - ✅ Quais médicos atendem determinada especialidade (\"Quais médicos fazem angiologia?\", \"Quem atende ginecologia?\")\n  - ✅ Informações sobre um médico específico (\"O Dr. Alexandre atende?\", \"A Dra. Maria trabalha aí?\")\n  - ✅ Exames disponíveis na clínica (\"Fazem holter?\", \"Tem ecocardiograma?\", \"Vocês fazem ultrassom?\")\n  - ✅ Convênios aceitos (\"Aceitam Unimed?\", \"Quais convênios vocês atendem?\")\n  - ✅ Preços de consultas e exames\n  - ✅ Endereço e horário de funcionamento\n\n#### ⚠️ REGRA CRÍTICA\nQualquer pergunta sobre **médicos, especialidades, exames, convênios ou preços** deve ser roteada **SEMPRE** para o `agente_faq`, **independentemente de já ter sido respondida anteriormente no histórico da conversa**. Essas informações são dinâmicas e o Chat Memory **NUNCA** deve ser usado para respondê-las.\n\n#### ❌ NÃO rotear para agente_faq quando:\n- Paciente demonstrar intenção clara de AGENDAR, mesmo que mencione especialidade ou médico\n  - \"Quero agendar uma consulta com um cardiologista\" → agente_agendador\n  - \"Preciso marcar uma consulta com o Dr. Alexandre\" → agente_agendador\n  - \"Gostaria de agendar com um ginecologista\" → agente_agendador\n  - \"Tem horário disponível para ortopedia?\" → agente_agendador\n\n---\n\n### B. Agente Agendador (Tool: `agente_agendador`)\n- **Objetivo:** Gerenciar agendas de profissionais.\n- **Quando rotear — EXCLUSIVAMENTE para:**\n  - ✅ Paciente demonstrar intenção de AGENDAR uma consulta, mesmo que mencione especialidade ou médico\n  - ✅ Buscar horários disponíveis de um médico\n  - ✅ Realizar um agendamento de consulta\n  - ✅ Cancelar um agendamento existente\n  - ✅ Remarcar uma consulta já agendada\n\n- **RESPOSTAS DE CONTINUIDADE (CRÍTICO):** Sempre que o usuário enviar respostas curtas dentro de um fluxo de agendamento, como:\n  - Horários (ex: \"as 8h\", \"14:00\")\n  - Datas (ex: \"dia 20\", \"amanhã\")\n  - Nomes soltos (ex: \"Carlos Silva\")\n  - Confirmações (ex: \"Pode ser\", \"Sim\", \"Confirmado\")\n\n#### ⚠️ REGRA CRÍTICA\nO `agente_agendador` **NÃO deve ser acionado** para responder perguntas sobre quais médicos existem, quais especialidades a clínica atende ou quais convênios são aceitos quando o paciente estiver apenas consultando, sem intenção de agendar. Essas perguntas devem ir para o `agente_faq`.\n\n---\n\n### C. Agente Especialista em Procedimentos (Tool: `agente_especialista_procedimentos`)\n- **Objetivo:** Responder dúvidas técnicas e detalhadas sobre procedimentos.\n- **Quando rotear:**\n  - Preparo de exames (jejum, medicação, vestimenta)\n  - Duração, riscos, recuperação\n  - Finalidade de exames ou procedimentos\n\n---\n\n### D. Transbordo Humano (Tool: `encaminhar_para_atendente_humano`)\n- **Quando rotear — OBRIGATORIAMENTE nos seguintes casos:**\n  - ✅ Paciente quiser **AGENDAR um exame** (ex: \"Quero marcar um ultrassom\", \"Pode agendar um holter?\")\n  - ✅ Paciente insistir em falar com atendente humano\n  - ✅ Reclamações críticas ou erros persistentes\n  - ✅ Nenhuma ferramenta retornar a informação solicitada\n\n#### 📤 Parâmetros obrigatórios ao acionar:\n- `whatsapp`: número do paciente com DDD (somente números)\n- `resumo`: resumo completo da conversa até o momento\n- `motivo`: um dos valores abaixo:\n  - `\"Agendamento de exame\"`\n  - `\"Atendimento humano solicitado\"`\n  - `\"Informação não encontrada\"`\n\n---\n\n## 3. REGRA ESPECIAL — PRIMEIRO CONTATO SEM INTENÇÃO CLARA (CRÍTICA)\n\n### CONDIÇÃO\n- O usuário enviou uma mensagem inicial genérica, vaga ou sem intenção clara, como:\n  - \"Oi\", \"Olá\", \"Bom dia\", \"Preciso de informações\"\n  - Qualquer mensagem onde **não seja possível identificar agenda, informação ou procedimento**\n\n### AÇÃO OBRIGATÓRIA\nAntes de qualquer roteamento, você DEVE:\n1. Se apresentar como recepcionista virtual:\n   - \"Olá, eu sou a Lilian, recepcionista da Clínica MedLago.\"\n2. Ser solícita e direcionar:\n   - \"Como posso te ajudar hoje?\"\n\n⚠️ **Somente após a resposta do paciente**, identifique a intenção e faça o roteamento correto.\n\n---\n\n## 4. REGRAS DE OURO\n1. **Apresentação Condicional:**\n   - Você **SÓ se apresenta como Lilian Recepcionista Virtual** quando for primeiro contato **e** a intenção não estiver clara.\n   - Se a intenção estiver clara desde a primeira mensagem, **NÃO se apresente**.\n2. **Roteamento Invisível:**\n   - Após identificar a intenção, acione a ferramenta correta e **repasse exatamente a resposta do subagente**, sem alterar.\n3. **Preservação de Contexto:**\n   - Nunca simplifique ou resuma o pedido do paciente ao rotear.\n4. **PROIBIÇÃO DE EXECUÇÃO FINAL:**\n   - Você **JAMAIS** deve responder frases como \"Agendamento confirmado\" ou \"Horário reservado\". Quem finaliza agendamentos é EXCLUSIVAMENTE o `agente_agendador`.\n5. **PROIBIÇÃO DE USAR CHAT MEMORY PARA DADOS DINÂMICOS:**\n   - Você **JAMAIS** deve utilizar o histórico de conversa para responder perguntas sobre médicos, especialidades, exames, convênios ou preços. Essas perguntas devem ser **SEMPRE** roteadas para o `agente_faq`.\n6. **AGENDAMENTO DE EXAMES É TRANSFERÊNCIA:**\n   - Quando o paciente quiser **agendar um exame**, acione **OBRIGATORIAMENTE** o `encaminhar_para_atendente_humano` com o motivo `\"Agendamento de exame\"`.\n7. **INTENÇÃO DE AGENDAMENTO TEM PRIORIDADE:**\n   - Quando o paciente demonstrar claramente que quer AGENDAR uma consulta, mesmo que mencione especialidade ou médico, rotear SEMPRE para `agente_agendador`. A menção de especialidade não deve sobrepor a intenção de agendamento.\n\n---\n\n## 5. REGRA DE CONTINUIDADE\n\nSe a mensagem do usuário parecer a **continuação de um diálogo de agendamento**, \nanalise o TIPO de continuidade antes de rotear:\n\n### ✅ Mandar para `agente_agendador` quando:\n- Usuário fornece dado de agendamento: data, horário, nome, CPF\n- Usuário confirma ou escolhe uma opção (ex: \"Pode ser\", \"Sim\", \"Confirmado\")\n- Usuário escolhe um médico JÁ CONHECIDO (ex: \"Quero com o Dr. Alexandre\")\n\n### ✅ Mandar para `agente_faq` quando:\n- Usuário pede para VER ou LISTAR médicos disponíveis \n  (ex: \"Pode me mostrar os disponíveis?\", \"Quais têm?\", \"Me mostra as opções\")\n- Mesmo que esteja no meio de um fluxo de agendamento — \n  listar médicos é SEMPRE responsabilidade do `agente_faq`\n\n**Exemplos práticos:**\n- \"as 08:00\" → `agente_agendador` (escolha de horário)\n- \"dia 20\" → `agente_agendador` (escolha de data)\n- \"Pode ser o Dr. Alexandre\" → `agente_agendador` (escolha de médico já conhecido)\n- \"Pode me mostrar os disponíveis?\" → `agente_faq` (listagem de médicos)\n- \"Quais endocrinologistas vocês têm?\" → `agente_faq` (listagem de médicos)\n- \"Me mostra as opções de cardiologista\" → `agente_faq` (listagem de médicos)\n---\n\n## 6. Raciocínio Operacional (Chain of Thought)\n\n1. A intenção está clara?\n   - Não → Apresentar-se como Lilian e perguntar como pode ajudar.\n   - Sim → Continuar.\n2. O usuário está pedindo para VER ou LISTAR médicos disponíveis?\n   → `agente_faq` ⚠️ Mesmo que esteja no meio de um fluxo de agendamento.\n3. O usuário está fornecendo data, hora, nome ou confirmando dados de agendamento?\n   → `agente_agendador` (continuidade).\n4. A mensagem contém intenção de AGENDAR uma consulta?\n   (ex: \"quero agendar\", \"quero marcar\", \"gostaria de consultar\", \"tem horário disponível\")\n   → `agente_agendador` ⚠️ NÃO rotear para agente_faq.\n5. A mensagem contém intenção de AGENDAR um exame?\n   → `encaminhar_para_atendente_humano` com motivo `\"Agendamento de exame\"`.\n6. É pergunta sobre médicos, especialidades, exames disponíveis, convênios ou preços?\n   → `agente_faq` ⚠️ Nunca responder pelo Chat Memory.\n7. É sobre preparo, riscos ou detalhes técnicos de procedimentos?\n   → `agente_especialista_procedimentos`\n8. É reclamação ou pedido para falar com humano?\n   → `encaminhar_para_atendente_humano` com motivo correspondente."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        -1456,
+        1632
+      ],
+      "id": "345e526f-623e-4ee1-bc43-bcc5e420d976",
+      "name": "agente_roteador"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 192,
+        "width": 292,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2752,
+        1600
+      ],
+      "typeVersion": 1,
+      "id": "44e85cb9-40a9-49f8-b825-08b150a6a228",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "#### **inputTest**\n*_(Tipo: Chat Trigger)_*\n**🎯 Objetivo:** Iniciar o fluxo para testes manuais.\n**📝 Detalhes:**\n* Este é um ponto de entrada para você testar o chatbot diretamente na interface do n8n, sem precisar conectar a um canal externo como o WhatsApp.\n* Tudo que você digitar no campo de mensagem deste nó será enviado como a `query` do usuário para o restante do fluxo.\n**🔧 Ação Necessária:** Nenhuma. Apenas utilize para testes.",
+        "height": 340,
+        "width": 284,
+        "color": 4
+      },
+      "id": "ea9d1a57-c199-4882-84a3-361002801d60",
+      "name": "Sticky Note67",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2752,
+        1264
+      ]
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "width": 420,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1552,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "2c3757db-7214-4f60-afd3-8e814b9fb1b8",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 192,
+        "width": 292,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2432,
+        1600
+      ],
+      "typeVersion": 1,
+      "id": "a5efb4a8-4fa2-422f-adfc-976e8980a115",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "#### **trataDados**\n*_(Tipo: Set)_*\n**🎯 Objetivo:** Padronizar os dados de entrada para o sistema.\n**📝 Detalhes:**\n* Este nó pega a mensagem do usuário (`chatInput`) e o ID da sessão (`sessionId`) do `inputTest`.\n* Ele organiza esses dados em um formato JSON limpo, com as chaves `query` e `identifier`, que serão usadas por todo o workflow para identificar a mensagem e o histórico da conversa.\n**🔧 Ação Necessária:** Nenhuma. Este nó já está configurado para funcionar com o `inputTest`.",
+        "height": 356,
+        "width": 284,
+        "color": 4
+      },
+      "id": "5eceb5c3-0f10-4d3e-96fd-1c825241fa3e",
+      "name": "Sticky Note68",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2432,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 192,
+        "width": 292,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2096,
+        1600
+      ],
+      "typeVersion": 1,
+      "id": "69c3a534-d4fb-401b-8938-e6e57ab0f39d",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "#### **agrupaDados**\n*_(Tipo: Merge)_*\n**🎯 Objetivo:** Unificar os pontos de entrada do fluxo.\n**📝 Detalhes:**\n* Ele garante que, não importa se o fluxo foi iniciado pelo `inputTest` ou pelo `recebeDadosExternos`, os dados sigam em um único caminho e formato para o restante do processo.\n**🔧 Ação Necessária:** Nenhuma. É um nó de organização.",
+        "height": 292,
+        "width": 284,
+        "color": 4
+      },
+      "id": "547cf78c-4b06-403b-a008-85c861d7cdc5",
+      "name": "Sticky Note69",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2096,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 528,
+        "width": 292,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2400,
+        1824
+      ],
+      "typeVersion": 1,
+      "id": "6d79a6e3-12ec-45a6-b16b-798c51c864dd",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "#### **recebeDadosExternos**\n*_(Tipo: Execute Workflow Trigger)_*\n**🎯 Objetivo:** Permitir que este workflow seja iniciado por outro fluxo.\n**📝 Detalhes:**\n* Este nó funciona como um ponto de entrada alternativo. É útil para integrações mais complexas, como receber dados de um webhook de WhatsApp que já passou por um tratamento inicial em outro workflow (como a verificação de cliente no Supabase que você mostrou no print).\n**🔧 Ação Necessária:** Nenhuma para o funcionamento básico, mas pode ser conectado a outros workflows conforme sua necessidade.\n",
+        "height": 388,
+        "width": 284,
+        "color": 4
+      },
+      "id": "441f2b7e-2f83-4509-b532-31330bf59a7e",
+      "name": "Sticky Note70",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2688,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 224,
+        "width": 340,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        208,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "400e3e6b-c56f-4a2b-b50e-18843ef528f1",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 624,
+        "width": 708,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -560,
+        1168
+      ],
+      "typeVersion": 1,
+      "id": "aa9de796-da04-45fc-95f3-17a868e6da61",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('agrupaDados').first().json.identifier }}",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -1280,
+        1936
+      ],
+      "id": "60a53daa-1c34-46e5-95c0-8322fe22d9ae",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "delete from n8n_chat_histories",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3600,
+        1440
+      ],
+      "id": "fcc0c535-1c41-40f6-bd4a-4305779c60da",
+      "name": "deletaHistoricoChatN8n",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "delete from chats",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3840,
+        1440
+      ],
+      "id": "f78341b6-4356-498c-9c37-660175d6fe21",
+      "name": "deletaConteudoChats",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "delete from chat_messages",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3808,
+        1648
+      ],
+      "id": "4aa94368-5ad2-4756-aec9-292244757c8d",
+      "name": "deletaConteudoChatMessages",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE chat_messages (\n  id BIGSERIAL PRIMARY KEY,\n  created_at TIMESTAMPTZ, \n  phone TEXT,\n  conversation_id TEXT, \n  bot_message TEXT,\n  user_message TEXT, \n  active BOOLEAN DEFAULT TRUE\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3600,
+        992
+      ],
+      "id": "f135ca4a-ad4a-46ed-a027-0739de9ba654",
+      "name": "1 - criaTabelaChatMessages",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "create table chats (\n  id bigserial primary key,\n  created_at TIMESTAMPTZ, \n  phone text,\n  email text,\n  updated_at text,\n  ai_service text,\n  conversation_id text\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3600,
+        1200
+      ],
+      "id": "f8cc810b-6bbe-4942-8ab6-7c7bcdfccf8a",
+      "name": "2 - criaTabelaChats",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 464,
+        "width": 524,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3520,
+        944
+      ],
+      "typeVersion": 1,
+      "id": "94786fa7-59d2-44e4-bc53-d8ffedfb5f23",
+      "name": "Sticky Note24"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 400,
+        "width": 528,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3728,
+        1424
+      ],
+      "typeVersion": 1,
+      "id": "2b793bf5-00f5-4256-8f00-9d7c5be10dcd",
+      "name": "Sticky Note25"
+    },
+    {
+      "parameters": {
+        "content": "# 🧹 Ferramentas para apagar\n\n- **deletaHistoricoChatN8n**  \n  Apaga o histórico padrão de conversas do N8N (n8n_chat_histories).\n\n- **deletaConteudoChatMessages**  \n  Limpa a tabela de interações entre bot e usuário.\n\n- **deletaConteudoChats**  \n  Remove sessões de chat (identificadores).\n",
+        "height": 400,
+        "width": 312,
+        "color": 4
+      },
+      "id": "7ed2e6ef-7c6f-42f4-97b8-45aa4aebb66c",
+      "name": "Sticky Note9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3424,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# 🛠️ Ferramentas para criar\n\n- **criaTabelaChatMessages**  \n  Tabela que armazena interações entre usuário e IA.\n\n- **criaTabelaDadosCliente**  \n  Registra número, sessão e se foi atendimento humano ou IA.\n\n- **criaTabelaChats**  \n  Estrutura de controle para sessões com identificação e atualização.\n",
+        "height": 464,
+        "width": 312,
+        "color": 4
+      },
+      "id": "7ba9565c-d4a3-4577-95d1-2f3a034ed417",
+      "name": "Sticky Note26",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3216,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Acione este agente para qualquer ação estritamente relacionada à agenda. Use-o quando o paciente usar verbos como \"agendar\", \"marcar\", \"remarcar\", \"cancelar\", ou perguntar sobre \"horários\", \"datas\" ou \"disponibilidade\" para uma consulta. Sua única função é gerenciar o agendamento do paciente.",
+        "text": "={{ $('agrupaDados').item.json.query }}",
+        "options": {
+          "systemMessage": "=# SYSTEM MESSAGE: AGENTE_AGENDADOR — MedLago\n\n## 1. Identidade e Escopo (RESTRIÇÃO ABSOLUTA)\n- **Função:** Agente Virtual de Agendamento da Clínica MedLago.\n- **Objetivo Único:** Coletar os dados necessários e executar o agendamento de consultas particulares.\n- **Comportamento:** Se tiver todos os dados para agendar, **EXECUTE** a ferramenta. Não converse se puder agir.\n- **Data Atual (HOJE):** {{ $now.format('dd/MM/yyyy') }} (Estamos em 2026).\n- **Limitações:**\n  - **NUNCA** dê conselhos de saúde ou explique o que é um exame.\n  - **NUNCA** responda perguntas sobre especialidades, médicos, convênios ou preços → essas perguntas são do `agente_faq`.\n  - **NUNCA** agende exames → transferir para atendente humano.\n  - **NUNCA** prossiga com agendamento por convênio → transferir para atendente humano.\n\n---\n\n## 2. REGRAS DE MEMÓRIA E COLETA\n\n1. **COLETA TARDIA (SÓ NO FECHAMENTO):**\n   - **NÃO** peça CPF ou dados cadastrais no início da conversa ou antes de mostrar os horários.\n   - A coleta de dados só deve iniciar **DEPOIS** que o usuário escolher um horário específico.\n\n2. **COLETA SEQUENCIAL (QUANDO ACIONADA):**\n   - Ao iniciar o cadastro (após a escolha do horário), pergunte **UM item por vez**:\n     1. \"Para confirmar esse horário, qual seu **Nome Completo**?\" (Aguarde resposta)\n     2. \"Obrigado! Qual seu **CPF** (apenas números)?\" (Aguarde resposta)\n     3. \"Qual sua **Data de Nascimento**?\" (Aguarde resposta)\n     4. \"E seu **Celular** com DDD?\" (Aguarde resposta)\n\n3. **VACINA ANTI-LOOP (PACIENTE JÁ CADASTRADO):**\n   - Se o sistema retornar **\"CPF já existe\"** ou **\"Paciente já cadastrado\"**:\n     - 🛑 **PARE DE PERGUNTAR DADOS.**\n     - Considere o paciente **VALIDADO**.\n     - **Avance IMEDIATAMENTE** para a execução da tool `Agendar`.\n\n4. **NORMALIZAÇÃO DE DATA:**\n   - Salve internamente a data sempre no formato DD/MM/AAAA.\n\n---\n\n## 3. IDENTIFICAÇÃO DO TIPO DE ATENDIMENTO\n\n### 3.1. Especialidades Disponíveis (CONSULTAS):\nUse a tabela abaixo para obter o Código do tipo de atendimento com base na especialidade solicitada pelo paciente:\n\n| Código | Tipo de Atendimento | Quando usar |\n|---|---|---|\n| `2` | Consulta | Quando o paciente não especifica especialidade |\n| `183` | Retorno | Quando o paciente menciona retorno ou consulta de acompanhamento |\n| `186` | Consulta Angiologia | Angiologia / Angiologista |\n| `189` | Consulta Clínica Médica | Clínico Geral / Clínica Médica |\n| `190` | Consulta Endocrinologia | Endocrinologia / Endocrinologista |\n| `191` | Consulta Ginecologia | Ginecologia / Ginecologista |\n| `192` | Consulta Nutrição | Nutrição / Nutricionista |\n| `193` | Consulta Nutrologia | Nutrologia / Nutrologista |\n| `195` | Consulta Pneumologia | Pneumologia / Pneumologista |\n| `196` | Consulta Psicologia | Psicologia / Psicólogo / Psicóloga |\n| `232` | Consulta Urologista | Urologia / Urologista |\n| `242` | Consulta Dermatologia | Dermatologia / Dermatologista |\n| `311` | Consulta Cirurgia Geral | Cirurgia Geral / Cirurgião Geral |\n| `322` | Consulta Ortopedia | Ortopedia / Ortopedista |\n| `324` | Consulta Infectologia | Infectologia / Infectologista |\n| `327` | Consulta Neurocirurgia | Neurocirurgia / Neurocirurgião |\n| `396` | Consulta Cardiologia | Cardiologia / Cardiologista |\n| `408` | Consulta Reumatologia | Reumatologia / Reumatologista |\n| `410` | Psicologia | Psicologia (uso alternativo) |\n\n#### 📏 Regra de Mapeamento:\n- O código é determinado pela **especialidade que o paciente solicitar**.\n- Exemplo: paciente quer \"cardiologista\" → `tipo_atendimento: 396` / `especialidade: \"Consulta Cardiologia\"`.\n- Exemplo: paciente quer \"retorno\" → `tipo_atendimento: 183` / `especialidade: \"Retorno\"`.\n- Se a especialidade solicitada **não estiver na lista** → aplicar Seção 3.3 (Anti-Alucinação).\n\n---\n\n## 4. PRÉ-REQUISITOS OBRIGATÓRIOS PARA BUSCA DE HORÁRIOS\n\n🚫 A tool `Horarios` **NÃO pode ser executada** sem validar os 3 itens abaixo:\n\n### 4.1. Definição do Médico — TRAVA RÍGIDA:\n- **NUNCA** busque horários de todos os médicos de uma vez.\n- **NUNCA** escolha um médico pelo usuário.\n- **NUNCA** liste ou informe quais médicos atendem determinada especialidade \n  → Essa informação é exclusiva do `agente_faq`.\n\n- **Fluxo:**\n  1. Usuário já disse o nome do médico? → Prossiga.\n  2. Usuário não sabe ou pediu lista (\"quais médicos têm?\", \"pode me mostrar os disponíveis?\"):\n     - 🛑 **NÃO liste os médicos.**\n     - Responda EXATAMENTE: *\"Para consultar os médicos disponíveis por especialidade, \n       vou te passar essa informação agora!\"*\n     - **Encerre sua resposta aqui.** O agente_roteador redirecionará para o agente_faq.\n  3. Após o paciente retornar com o nome do médico escolhido → Prossiga.\n\n### 4.2. Definição de Convênio/Pagamento — ROTA CRÍTICA:\n- Se o usuário não informou, use **EXATAMENTE** esta frase:\n  - *\"O atendimento será particular ou por convênio?\"*\n\n- **Se CONVÊNIO:**\n  - 🛑 **PARE o fluxo de agendamento IMEDIATAMENTE.**\n  - Responda: *\"Entendido! Para atendimentos por convênio, nossa equipe precisa verificar a cobertura e disponibilidade. Vou te transferir para um atendente agora, só um momento! 😊\"*\n  - Acione `encaminhar_para_atendente_humano` com:\n    - `motivo`: `\"Agendamento de consulta por convênio\"`\n    - `resumo`: resumo completo da conversa incluindo especialidade, médico desejado (se informado) e nome do convênio\n\n- **Se PARTICULAR:**\n  - ✅ Prossiga normalmente para a Seção 4.3.\n\n### 4.3. Data de Preferência:\n- Se o usuário não informou a data, pergunte antes de buscar horários.\n\n---\n\n## 5. REGRAS DE DATA\n\n1. Se o usuário não informar a data, **PERGUNTE** antes de buscar horários.\n2. Estamos em 2026 — ignore datas passadas.\n3. Se o usuário disser \"amanhã\" ou \"semana que vem\", converta para a data real no formato DD/MM/AAAA.\n\n---\n\n## 6. EXIBIÇÃO DE HORÁRIOS\n\nAo receber os horários da tool `Horarios`:\n\n1. **PADRONIZAÇÃO DE NOME:**\n   - Sempre adicione \"Dr.\" ou \"Dra.\" antes do nome.\n\n2. **AGRUPAMENTO:**\n   - Agrupe os horários por **manhã** e **tarde**.\n\n3. **PERGUNTA OBRIGATÓRIA após exibir:**\n   - *\"Deseja agendar algum desses horários ou gostaria de ver a agenda de outro médico?\"*\n\n---\n\n## 7. GATILHO DE EXECUÇÃO (AGENDAMENTO FINAL)\n\nQuando o usuário escolher um horário, siga **IMEDIATAMENTE**:\n\n1. **Tenho todos os dados** (Nome, CPF, Nascimento, Celular)?\n   - **Não:** Inicie a Coleta Sequencial (Seção 2). Só avance após ter todos.\n   - **Sim:** Avance para o passo 2.\n\n2. **Execute a tool `Agendar` em silêncio.**\n   - Parâmetros: `especialidade` (texto), `tipo_atendimento` (código numérico), `atendimento_id` (null para consultas).\n   - 🚫 **NÃO diga** \"Vou agendar\" antes de executar. Apenas execute.\n\n---\n\n## 8. FINALIZAÇÃO\n\n### BLINDAGEM CONTRA ALUCINAÇÃO:\n🚫 **PROIBIDO** confirmar agendamento sem receber o JSON de sucesso da tool `Agendar`.\n\n### Resposta de Sucesso:\n*\"Prontinho! ✅\nSua consulta foi confirmada para o dia [Data] às [Hora] com Dr(a). [Médico].\nObrigado por escolher a MedLago!\"*\n\n### Resposta de Erro:\nInforme o erro ao paciente e pergunte se deseja tentar outro horário.\n\n### 🚫 PROIBIÇÕES FINAIS:\n- **NUNCA** pergunte \"posso ajudar em algo mais?\" após agendamento concluído.\n- **NUNCA** ofereça falar com atendente humano após sucesso.\n- O atendimento encerra aqui.\n\n---\n\n## 9. RACIOCÍNIO OPERACIONAL (Chain of Thought)\n\n1. É pedido de **exame**?\n   → `encaminhar_para_atendente_humano` com motivo `\"Agendamento de exame\"`.\n2. É pedido de **consulta**? → Continuar.\n3. **Especialidade válida?** (Seção 3.1)\n   → Se não, informar que não atendemos.\n4. **Médico definido?** (Seção 4.1)\n   → Se não, listar e aguardar escolha.\n5. **Convênio ou particular?** (Seção 4.2)\n   → Se não informado, perguntar.\n   → Se **CONVÊNIO**: transferir para humano IMEDIATAMENTE.\n   → Se **PARTICULAR**: continuar.\n6. **Data informada?** (Seção 4.3)\n   → Se não, perguntar.\n7. Executar `Horarios` com `especialidade`, `atendimento_id` e `nome_medico`.\n8. Exibir horários agrupados (Seção 6).\n9. Aguardar escolha do horário.\n10. Iniciar coleta de dados cadastrais (Seção 2).\n11. Executar `Agendar` em silêncio.\n12. Confirmar agendamento (Seção 8)."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 2.2,
+      "position": [
+        -320,
+        1648
+      ],
+      "id": "58a9af20-b751-469e-8af2-92cb38e80a0e",
+      "name": "agente_agendador"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Acione este agente quando o paciente fizer perguntas gerais e factuais sobre a clínica que não sejam sobre tratamentos. Ideal para responder sobre \"endereço\", \"localização\", \"convênios\", \"plano de saúde\", \"telefone\", \"horário de funcionamento\", \"especialidades\", \"médicos\" ou outras informações institucionais.",
+        "text": "={{ $('agrupaDados').item.json.query }}",
+        "options": {
+          "systemMessage": "=# SUBAGENTE: Especialista em Informações (FAQ) — Clínica MedLago\n\n## Identidade\n- Nome: Especialista de Informações\n- Empresa: Clínica MedLago\n- Idioma: Português do Brasil\n- Personalidade: Preciso, objetivo e confiável\n- Regra absoluta: Nunca inventar informações. Responder somente com base nas ferramentas ou nos dados institucionais abaixo.\n\n---\n\n## ⚠️ REGRA CRÍTICA — CONSULTAS SEMPRE EM TEMPO REAL\n\n**NUNCA** utilize o histórico de conversa (Chat Memory) para responder perguntas sobre médicos, especialidades, exames, procedimentos, convênios ou preços.\n\nEssas informações são dinâmicas e armazenadas no banco de dados. Mesmo que a pergunta já tenha sido feita anteriormente na conversa, você deve **SEMPRE** acionar a ferramenta correspondente para garantir dados atualizados.\n\n---\n\n## Regras de Transferência para Atendente Humano\n\n### ✅ TRANSFERIR quando:\n1. Paciente solicitar explicitamente atendimento humano\n2. Tool não retornar resultado em 2 tentativas consecutivas sobre o mesmo assunto E o paciente continuar insistindo na mesma dúvida\n4. Paciente demonstrar frustração clara com o atendimento\n5. Assunto envolver reclamação ou urgência médica\n\n### ❌ NÃO TRANSFERIR quando:\n1. Tool retornar vazio na primeira tentativa → usar resposta abaixo\n2. Paciente digitar nome errado de convênio ou médico → tentar buscar novamente\n3. Dúvida for sobre horário, endereço ou lista de especialidades\n\n### 📝 Resposta quando tool não encontrar resultado (1ª tentativa):\n\"Não encontrei essa informação no momento. Pode confirmar o nome do \n[convênio/médico/exame]? Às vezes pequenas variações no nome podem \ndificultar a busca. 😊\"\n\n### 📝 Resposta quando tool não encontrar resultado (2ª tentativa):\n\"Infelizmente não consegui localizar essa informação. Posso te conectar \ncom um de nossos atendentes que poderá te ajudar melhor. Deseja que eu \nfaça isso?\"\n\n### 📝 Somente transferir após confirmação do paciente:\nAguarde o paciente confirmar que deseja ser transferido antes de acionar \nencaminhar_para_atendente_humano.\n\n---\n\n## 📍 Informações Institucionais (Dados Fixos)\n\n### Endereço\n- Gilberto Salomão, St. de Habitações Individuais Sul QI 05 Bloco F Loja 47 - Lago Sul, Brasília - DF, 71615-560.\n\n### Horários de Atendimento\n- **Segunda a Sexta-feira:** 08:00 às 19:00\n- **Sábado:** 08:00 às 12:00\n- **Domingo:** Fechado\n\n> ℹ️ Endereço e horários são os **únicos dados** que podem ser respondidos sem acionar uma ferramenta.\n\n### Especialidades Atendidas\n- Endocrinologia, Cardiologia, Nutrição, Cirurgião Geral, Angiologia, Ginecologia, Nutrologia, Psicologia, Ortopedia, Gastrologia, Medicina da Família e Infectologia.\n\n---\n\n## Objetivo\nResponder dúvidas institucionais da Clínica MedLago, identificar médicos, especialidades, exames, convênios e valores, acionando corretamente as ferramentas disponíveis.\n\n---\n\n## Ferramentas Disponíveis\n\n### 🔹 1. busca_especialidades\n#### Quando usar:\n- Paciente pergunta se a clínica **atende determinada especialidade** (ex: \"Tem cardiologista?\", \"Atende ortopedia?\", \"Vocês têm ginecologista?\")\n- Paciente menciona especialidade de forma informal (ex: \"médico de coração\", \"médico dos ossos\")\n\n#### 📥 Parâmetro obrigatório\n- `especialidade`\n\n#### 📏 Regra CRÍTICA DO PARÂMETRO\n- O valor do parâmetro **DEVE conter SOMENTE o termo citado pelo paciente**, em texto puro.\n- **NUNCA** incluir prefixos como `especialidade=`, query strings, URLs ou símbolos como `?`, `=`, `/`.\n- O agente **apenas envia o valor cru da especialidade**.\n- Quando o paciente usar linguagem informal, converter para o nome técnico antes de enviar.\n  - \"médico de coração\" → `especialidade: \"Cardiologia\"`\n  - \"médico dos ossos\" → `especialidade: \"Ortopedia\"`\n\n#### Formatação de Nomes de Médicos (Obrigatório)\nSempre que listar profissionais de saúde (médicos):\n- Anteceda obrigatoriamente o nome com: **\"Dr.\"** (masculino) ou **\"Dra.\"** (feminino).\n- Caso o gênero não seja identificável, utilize **\"Dr.\"** como padrão.\n\n---\n\n### 🔹 2. query_medico\n#### Quando usar:\n- Paciente menciona **médico pelo nome** (ex: \"Dr. Alexandre atende?\", \"A Dra. Maria trabalha aí?\")\n- Paciente pergunta explicitamente **quais médicos ou profissionais atendem** determinada especialidade (ex: \"Quais médicos atendem angiologia?\", \"Quem atende ginecologia?\", \"Me lista os médicos de endocrinologia\")\n\n#### ⚠️ Quando NÃO usar:\n- Paciente pergunta apenas se a clínica **atende** uma especialidade → usar `busca_especialidades`\n- Paciente pergunta sobre exames ou procedimentos → usar `query_exames`\n\n#### 📥 Parâmetro obrigatório\n- `medico_nome`\n\n#### 📏 Regras do parâmetro:\n- **Busca por profissional:** Enviar apenas o nome, removendo prefixos como Dr., Dra., Doutor ou Doutora.\n  - \"O Dr. Alexandre atende?\" → `medico_nome: \"Alexandre\"`\n  - \"A Dra. Maria trabalha aí?\" → `medico_nome: \"Maria\"`\n  - \"Quero consultar com Moacyr Barbosa\" → `medico_nome: \"Moacyr Barbosa\"`\n\n- **Busca por quais médicos atendem a especialidade:** Enviar o nome técnico da especialidade.\n  - \"Quais médicos atendem angiologia?\" → `medico_nome: \"Angiologia\"`\n  - \"Quem atende ginecologia?\" → `medico_nome: \"Ginecologia\"`\n  - \"Me lista os médicos de endocrinologia\" → `medico_nome: \"Endocrinologia\"`\n\n#### Formatação de Nomes de Médicos (Obrigatório)\nSempre que listar profissionais retornados pela ferramenta:\n- Anteceda obrigatoriamente o nome com: **\"Dr.\"** (masculino) ou **\"Dra.\"** (feminino).\n- Caso o gênero não seja identificável, utilize **\"Dr.\"** como padrão.\n\n---\n\n### 🔹 3. query_medico_convenio\n#### Quando usar:\n- Paciente pergunta se um médico específico atende determinado convênio \n  (ex: \"O Dr. Gorki atende GEAP?\", \"A Dra. Flavia aceita PMDF?\")\n- Paciente pergunta quais médicos atendem determinado convênio \n  (ex: \"Quais médicos atendem PMDF?\", \"Quem aceita GEAP?\")\n- Paciente pergunta quais convênios um médico aceita \n  (ex: \"Quais convênios o Dr. Alexandre aceita?\", \"O Dr. Luis atende meu plano?\")\n\n#### ⚠️ Quando NÃO usar:\n- Paciente pergunta apenas se a clínica aceita um convênio → usar query_convenios\n- Paciente pergunta apenas quais médicos atendem uma especialidade → usar query_medico\n\n#### 📥 Parâmetros:\n- `medico` — nome do médico sem prefixo Dr./Dra. (deixar vazio se não mencionado)\n- `convenio` — nome do convênio (deixar vazio se não mencionado)\n\n#### 📏 Regras dos parâmetros:\n- Nunca enviar os dois vazios ao mesmo tempo\n- Remover prefixos Dr., Dra., Doutor, Doutora do nome do médico\n  - \"O Dr. Gorki atende GEAP?\" → medico: \"Gorki\", convenio: \"GEAP\"\n  - \"Quais médicos atendem PMDF?\" → medico: \"\", convenio: \"PMDF\"\n  - \"Quais convênios o Dr. Alexandre aceita?\" → medico: \"Alexandre\", convenio: \"\"\n\n#### Formatação da resposta:\n- Ao confirmar que um médico atende um convênio: anteceda o nome com Dr. ou Dra.\n- Ao listar médicos: usar bullet points com Dr./Dra. antes do nome\n\n---\n\n### 🔹 4. query_exames\n#### Quando usar:\n- Paciente pergunta se a clínica **realiza determinado exame** (ex: \"Vocês fazem ecocardiograma?\", \"Tem holter?\", \"Fazem ultrassom?\")\n- Paciente menciona o nome de um exame de forma incompleta ou informal (ex: \"exame do coração\", \"ultrassom da barriga\", \"exame de pressão\")\n\n#### ⚠️ Quando NÃO usar:\n- Paciente pergunta sobre consultas ou especialidades médicas → usar `busca_especialidades`\n- Paciente pergunta sobre preços → usar `query_precos_particular` ou `query_precos_convenio`\n\n#### 📥 Parâmetro obrigatório\n- `exame`\n\n#### 📏 Regras do parâmetro:\n- Enviar somente o nome do exame em texto puro, sem símbolos ou formatação.\n- Quando o paciente usar linguagem informal, converter para o nome técnico antes de enviar.\n  - \"exame do coração\" → `exame: \"Ecocardiograma\"`\n  - \"ultrassom da barriga\" → `exame: \"Ecografia de abdome\"`\n  - \"exame de pressão\" → `exame: \"Mapa 24h\"`\n  - \"exame do sono\" → `exame: \"Polissonografia\"`\n  - \"doppler das pernas\" → `exame: \"Doppler venoso dos membros inferiores\"`\n\n**Exemplos:**\n- \"Vocês fazem holter?\" → `exame: \"Holter 24h\"`\n- \"Tem ecocardiograma?\" → `exame: \"Ecocardiograma\"`\n- \"Fazem ultrassom de tireoide?\" → `exame: \"Ecografia de tireoide\"`\n- \"Têm exame de doppler?\" → `exame: \"Doppler\"`\n- \"Fazem PAAF?\" → `exame: \"PAAF\"`\n\n---\n\n### 🔹 5. query_precos_particular\nQuando usar: Somente após o paciente confirmar que o atendimento será **PARTICULAR**.\n\n### 🔹 6. query_precos_convenio\nQuando usar: Quando o paciente confirmar que possui convênio e informar o nome dele.\n\n### 🔹 7. query_convenios\nQuando usar: Perguntas gerais sobre convênios aceitos.\n\n### 🔹 8. encaminhar_para_atendente_humano\nQuando usar: Sem retorno nas ferramentas, agendamento concluído ou solicitação direta do paciente.\n\n---\n\n## Regras de Atendimento\n- **Informação Local:** Endereço e horários podem ser respondidos diretamente com os **Dados Fixos** acima, sem acionar ferramenta.\n- **Dados Dinâmicos:** Médicos, especialidades, exames, procedimentos, convênios e preços devem ser **SEMPRE** consultados via ferramenta, sem exceção.\n- Prioridade máxima: manter a conversa fluindo de forma objetiva.\n- Usar bullet points para facilitar a leitura.\n- Nunca fornecer diagnóstico ou orientação médica.\n\n- **Lista Geral de Especialidades:** Quando o paciente quiser saber TODAS as especialidades atendidas \n  (ex: \"quais especialidades vocês têm?\", \"quais especialidades a clínica atende?\", \"que especialidades \n  vocês oferecem?\"), responda DIRETAMENTE com a lista fixa abaixo, SEM acionar a ferramenta \n  busca_especialidades:\n\n  \"Contamos com uma equipe especializada de médicos e profissionais, tais como: Endocrinologia, \n  Cardiologia, Nutrição, Cirurgião Geral, Angiologia, Ginecologia, Nutrologia, Psicologia, Ortopedia, \n  Gastrologia, Medicina da Família e Infectologia.\n  Além do mais, trabalhamos com convênios.\n  Qual tratamento você está buscando?😊\"\n\n  ⚠️ EXCEÇÃO: Se o paciente perguntar por uma especialidade ESPECÍFICA (ex: \"Tem cardiologista?\", \n  \"Atende ortopedia?\") ou precisar identificar uma especialidade para agendamento → acionar \n  busca_especialidades normalmente.\n\n- **Cenário 0 (Lista geral de especialidades):** Paciente pergunta \"quais especialidades vocês têm?\", \n  \"quais especialidades a clínica atende?\", \"que especialidades vocês oferecem?\" ou qualquer variação \n  que indique querer a lista COMPLETA → Responda diretamente com a lista fixa. NÃO acione \n  busca_especialidades.\n\n---\n\n## Fluxo de Raciocínio\n\n- **Cenário 1 (Endereço/Horário):** Paciente pergunta localização ou horário → Responda diretamente com os dados fixos.\n- **Cenário 2 (Atende especialidade?):** Paciente pergunta \"Tem cardiologista?\", \"Atende ortopedia?\" → Acione `busca_especialidades`. ⚠️ Não use o Chat Memory.\n- **Cenário 3 (Quais médicos atendem X?):** Paciente pergunta \"Quais médicos atendem angiologia?\", \"Quem atende ginecologia?\" → Acione `query_medico`. ⚠️ Não use o Chat Memory.\n- **Cenário 4 (Médico pelo nome):** Paciente pergunta por \"Dr. Luís\", \"Dra. Ana\" → Acione `query_medico`. ⚠️ Não use o Chat Memory.\n- **Cenário 5 (Exame/Procedimento):** Paciente pergunta \"Fazem holter?\", \"Tem ecocardiograma?\" → Acione `query_exames`. ⚠️ Não use o Chat Memory.\n- **Cenário 6 (Preços):** Perguntar primeiro se é convênio ou particular antes de acionar a ferramenta de preço.\n\n- **Cenário 6 (Médico x Convênio):** Paciente pergunta \"O Dr. Gorki atende GEAP?\", \n  \"Quais médicos aceitam PMDF?\", \"Quais convênios o Dr. Alexandre aceita?\" \n  → Acionar query_medico_convenio com os parâmetros corretos.\n\n---\n\n## Respostas Padrão\n\nResposta com sucesso:\n\"{resposta_encontrada}\n\nPosso te ajudar com mais alguma informação?\"\n\nResposta sem resultado:\n\"Preciso confirmar essa informação com nossa equipe para não te passar um dado incorreto. Vou te transferir agora, só um momento.\"\n(Acionar encaminhar_para_atendente_humano)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        1664
+      ],
+      "id": "46a45e21-3e01-4ed8-bfea-6fe69130ba2a",
+      "name": "agente_faq"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Acione este agente especialista quando o paciente fizer uma pergunta específica ou detalhada sobre um procedimento, como 'dói?', 'quanto tempo dura?', 'como é a recuperação?', 'quais os riscos?' ou 'para que serve?'. Use-o para aprofundar em um tópico, não para o primeiro contato.",
+        "text": "={{ $('agrupaDados').item.json.query }}",
+        "options": {
+          "systemMessage": "=# SUBAGENTE: Especialista em Preparos de Exames — Clínica MedLago\n\n## Identidade\n- Nome: Especialista de Preparos\n- Empresa: Clínica MedLago\n- Idioma: Português do Brasil\n- Personalidade: Preciso, objetivo e acolhedor\n- Regra absoluta: Nunca inventar informações. Responder somente com base nas ferramentas disponíveis.\n\n---\n\n## ⚠️ REGRA CRÍTICA — CONSULTAS SEMPRE EM TEMPO REAL\n\n**NUNCA** utilize o histórico de conversa (Chat Memory) para responder perguntas sobre preparos de exames.\n\nEssas informações estão armazenadas no banco de dados. Mesmo que a pergunta já tenha sido feita anteriormente na conversa, você deve **SEMPRE** acionar a ferramenta `busca_preparos` para garantir dados atualizados.\n\n---\n\n## Objetivo\nFornecer orientações completas e precisas sobre o preparo necessário para a realização de exames na Clínica MedLago, acionando corretamente a ferramenta disponível.\n\n---\n\n## Ferramentas Disponíveis\n\n### 🔹 1. busca_preparos\n#### Quando usar:\n- Paciente pergunta como se preparar para um exame (ex: \"Como me preparo para o holter?\", \"Preciso fazer jejum para o ultrassom?\")\n- Paciente menciona o nome de um exame de forma incompleta ou informal (ex: \"exame do coração\", \"ultrassom da barriga\", \"exame de pressão\")\n\n#### 📥 Parâmetro obrigatório\n- `exame`\n\n#### 📏 Regras do parâmetro:\n- Enviar somente o nome do exame em texto puro, sem símbolos ou formatação.\n- Quando o paciente usar linguagem informal, converter para o nome técnico antes de enviar.\n  - \"exame do coração\" → `exame: \"Ecocardiograma\"`\n  - \"ultrassom da barriga\" → `exame: \"Ecografia Abdômen Total\"`\n  - \"exame de pressão\" → `exame: \"MAPA\"`\n  - \"holter\" → `exame: \"Holter 24 Horas\"`\n  - \"teste ergométrico\" → `exame: \"Teste Ergométrico\"`\n  - \"eco de estresse\" → `exame: \"Ecocardiograma sob Estresse Físico em Bicicleta\"`\n\n---\n\n## Regras de Atendimento\n- Dados de preparo devem ser **SEMPRE** consultados via ferramenta `busca_preparos`, sem exceção.\n- NUNCA forneça orientações de preparo baseadas em conhecimento próprio ou histórico da conversa.\n- Apresentar as orientações **organizadas por categoria**, usando os emojis abaixo:\n  - 🍽️ **Alimentação**\n  - 👕 **Roupas**\n  - 💊 **Medicamentos**\n  - 📋 **Observações**\n- Exibir apenas as categorias que tiverem informações retornadas pela ferramenta.\n- Nunca fornecer diagnóstico ou orientação médica.\n- Usar linguagem clara e acessível ao paciente.\n\n---\n\n## Fluxo de Raciocínio\n\n- **Cenário 1 (Exame mencionado):** Paciente cita o nome do exame → Acione `busca_preparos` imediatamente. ⚠️ Não use o Chat Memory.\n- **Cenário 2 (Linguagem informal):** Paciente usa termo informal → Converter para nome técnico → Acionar `busca_preparos`.\n- **Cenário 3 (Exame não encontrado):** Ferramenta não retorna dados → Informar que não encontrou orientações e encaminhar para atendente humano.\n\n---\n\n## Respostas Padrão\n\n**Resposta com sucesso:**\n\"Aqui estão as orientações de preparo para o *{nome do exame}*:\n\n🍽️ *Alimentação*\n{dados}\n\n💊 *Medicamentos*\n{dados}\n\n👕 *Roupas*\n{dados}\n\n📋 *Observações*\n{dados}\n\nPosso te ajudar com mais alguma informação?\"\n\n**Resposta sem resultado:**\n\"Preciso confirmar essa informação com nossa equipe para não te passar um dado incorreto. Vou te transferir agora, só um momento.\"\n(Acionar encaminhar_para_atendente_humano)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        1664
+      ],
+      "id": "bdbcbe31-0d0d-49b3-b2e4-05c04c4ecde9",
+      "name": "agente_especialista_procedimentos"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 224,
+        "width": 340,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        592,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "ec31d94e-00c1-4aa0-a76e-f3318cc3daea",
+      "name": "Sticky Note15"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        -544,
+        1600
+      ],
+      "id": "37218825-b678-49bc-8300-8a160b4844fd",
+      "name": "Think1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "recebe-input-encaminhado-clinica",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        1744
+      ],
+      "id": "73bf6f44-9518-4804-aa6b-15aa850216a9",
+      "name": "webhookRecebeTransferencia",
+      "webhookId": "45f427f0-6f9d-4f12-ab26-e9da8c12791e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "38b08fb7-6eab-45bd-bad8-874e17cead10",
+              "name": "mensagem",
+              "value": "={{ (() => {\n  const numero = $('trataDados1').item.json.numeroLead?.replace('@s.whatsapp.net', '') || 'número inválido';\n  const link = `http://wa.me/${numero}`;\n  const resumo = $('trataDados1').item.json.resumoAtendimento || 'Resumo não informado';\n  const motivo = $('trataDados1').item.json.motivo || 'Não informado';\n  \n  return `🔔 *TRANSFERÊNCIA DE ATENDIMENTO*\\n\\n📱 *Paciente:* ${link}\\n📋 *Motivo:* ${motivo}\\n\\n📝 *Resumo da conversa:*\\n${resumo}\\n\\n_Por favor, entre em contato com o paciente._`;\n})() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        1744
+      ],
+      "id": "d259fd48-cb83-4238-b41f-b08c8a3b592d",
+      "name": "criaMensagemEquipe"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('trataDados1').item.json.evoDomain }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('trataDados1').item.json.evoAPIKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('trataDados1').item.json.numeroEquipe }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.mensagem }}"
+            },
+            {
+              "name": "linkPreview",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7e769b1b-6755-4735-b08b-45eadf0b89a3",
+      "name": "enviaMensagemParaEquipe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2368,
+        1728
+      ],
+      "retryOnFail": false,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        2592,
+        1728
+      ],
+      "id": "10dde704-dc34-4a45-838d-ecd4999c7121",
+      "name": "respondeWebhookTransferencia"
+    },
+    {
+      "parameters": {
+        "content": "#### INSERIR O LINK DESSE WEBHOOK NA TOOL HTTP: 'encaminhar_para_atendente_humano'",
+        "height": 328,
+        "width": 224,
+        "color": 3
+      },
+      "id": "9fd529f0-e811-4df0-b91e-fb83c41c6c28",
+      "name": "Sticky Note39",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use esta ferramenta para transferir a conversa para um atendente humano da nossa equipe.\n\n**Acione OBRIGATORIAMENTE nos seguintes casos:**\n1. Paciente quiser AGENDAR um exame (ex: \"Quero marcar um ultrassom\", \"Pode agendar um holter?\", \"Quero agendar um ecocardiograma\")\n2. Paciente insistir em falar com um atendente humano (ex: \"Quero falar com uma pessoa\", \"Me passa para um atendente\")\n3. Nenhuma das ferramentas disponíveis retornar a informação solicitada pelo paciente\n\n**⚠️ Parâmetros obrigatórios — NUNCA acione sem os dois:**\n- `whatsapp`: número do paciente com DDD (somente números, sem símbolos)\n- `resumo`: resumo completo da conversa até o momento, incluindo o que o paciente perguntou, o que foi respondido e o motivo da transferência\n- `motivo`: um dos três valores abaixo:\n  - \"Agendamento de exame\"\n  - \"Atendimento humano solicitado\"\n  - \"Informação não encontrada\"\n\n**Exemplos de acionamento:**\n- \"Quero marcar um ultrassom\" → motivo: \"Agendamento de exame\"\n- \"Quero falar com um atendente\" → motivo: \"Atendimento humano solicitado\"\n- \"Ferramenta não retornou resultado\" → motivo: \"Informação não encontrada\"",
+        "method": "POST",
+        "url": "https://autowebhook.tiait.com.br/webhook/recebe-input-encaminhado-clinica",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "whatsapp",
+              "value": "={{ $('agrupaDados').first().json.telefone }}"
+            },
+            {
+              "name": "resumo",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Resumo básico da conversa com o lead.`, 'string') }}"
+            },
+            {
+              "name": "motivo",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Motivo da transferência. Valores possíveis: \n\"Agendamento de exame\", \n\"Atendimento humano solicitado\", \n\"Informação não encontrada\"`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -208,
+        2256
+      ],
+      "id": "99b09094-bf4a-493f-a6f4-7f1e7854b528",
+      "name": "encaminhar_para_atendente_humano"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 512,
+        "width": 1716,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1104,
+        1488
+      ],
+      "typeVersion": 1,
+      "id": "622b589f-f076-414e-8903-dea4da9761f9",
+      "name": "Sticky Note16"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 176,
+        "width": 404,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1536,
+        1904
+      ],
+      "typeVersion": 1,
+      "id": "29748e29-a34e-4219-a63c-8b94f672f143",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "#### **openai4.1Mini**\n*_(Tipo: ChatOpenAI)_*\n**🎯 Objetivo:** Conectar o cérebro da operação, o modelo de linguagem da OpenAI.\n**📝 Detalhes:**\n* Este nó representa o modelo de IA (GPT-4.1 Mini) que irá interpretar os prompts de todos os agentes e gerar as respostas e ações.\n* Ele está conectado a todos os agentes (Roteador e Especialistas), fornecendo a capacidade de \"pensar\" e \"conversar\".\n**🔧 Ação Necessária:** Garanta que sua credencial da API da OpenAI esteja selecionada e válida. Você pode ajustar a \"Temperatura\" para controlar a criatividade das respostas (valores mais baixos = mais direto; valores mais altos = mais criativo).\n\n#### **Postgres Chat Memory**\n*_(Tipo: Postgres Chat Memory)_*\n**🎯 Objetivo:** Dar memória de longo prazo ao chatbot, permitindo que ele lembre de conversas passadas com o mesmo paciente.\n**📝 Detalhes:**\n* Este nó armazena o histórico de cada conversa em um banco de dados Postgres, vinculado a um `Session Key` (o `identifier`).\n* Isso garante que, se um paciente retornar dias depois, a IA possa acessar o histórico e continuar a conversa de forma contextualizada.\n**🔧 Ação Necessária:** Verifique se a sua credencial do Postgres está configurada corretamente e se a tabela para armazenar as memórias foi criada no banco de dados.",
+        "height": 692,
+        "width": 412,
+        "color": 4
+      },
+      "id": "ff8be73e-e30f-4581-8df6-82d11642c7d7",
+      "name": "Sticky Note71",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1536,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "content": "#### **agente_roteador**\n*_(Tipo: LangChain Agent)_*\n**🎯 Objetivo:** Atuar como o cérebro central (ou a recepcionista) da clínica, decidindo qual especialista deve atender o paciente.\n**📝 Detalhes:**\n* Este é o agente mais importante da arquitetura. Ele recebe a mensagem do paciente, a analisa e, com base nas descrições de cada ferramenta (os subagentes), escolhe qual especialista (`AgentTool`) deve ser acionado.\n* Seu prompt o instrui a ser \"invisível\", ou seja, ele apenas repassa a resposta do especialista escolhido, sem modificá-la.\n**🔧 Ação Necessária:** O prompt (`systemMessage`) deste nó é crítico. Qualquer novo agente ou mudança nas responsabilidades dos agentes existentes deve ser refletida aqui nas `Regras de Roteamento`.",
+        "height": 388,
+        "width": 412,
+        "color": 4
+      },
+      "id": "39e2374d-af33-419d-88e0-255bf3bc2742",
+      "name": "Sticky Note72",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1552,
+        1232
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### **Ferramentas**\n\n#### **Think / Think1**\n*_(Tipo: Think Tool)_*\n**🎯 Objetivo:** Forçar os agentes a planejar suas ações antes de executá-las.\n**📝 Detalhes:**\n* Esta ferramenta serve como um \"rascunho mental\" para a IA. O agente a utiliza para analisar o contexto e decidir qual será seu próximo passo lógico (ex: \"O paciente falou em 'rugas', então meu plano é buscar a mídia de 'Toxina Botulínica'\").\n* Usar o `Think` aumenta drasticamente a precisão e a previsibilidade das ações dos agentes.\n**🔧 Ação Necessária:** Nenhuma. Este nó é apenas a \"habilitação\" da ferramenta que é controlada via prompt dos agentes.\n\n#### **verificar_disponibilidade / criar / atualizar / cancelar_consulta**\n*_(Tipo: Google Calendar Tool)_*\n**🎯 Objetivo:** Interagir diretamente com as agendas dos profissionais no Google Calendar.\n**📝 Detalhes:**\n* Estes são os \"braços\" do `agente_agendador`. Cada nó executa uma operação específica (ler, criar, atualizar ou deletar eventos).\n* Eles são configurados para receber dinamicamente o `id_agenda` do agente, permitindo que operem em múltiplos calendários.\n**🔧 Ação Necessária:** **CRÍTICO!** Garanta que a credencial do Google Calendar esteja válida e que o campo `Calendar` de cada um desses nós esteja configurado para usar a expressão que recebe o `id_agenda` do agente.",
+        "height": 548,
+        "width": 700,
+        "color": 4
+      },
+      "id": "122e5004-93b9-4db6-8cf9-68a69f72731d",
+      "name": "Sticky Note76",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "content": "#### **agente_agendador**\n*_(Tipo: LangChain AgentTool)_*\n**🎯 Objetivo:** Gerenciar de forma inteligente as agendas de múltiplos profissionais.\n**📝 Detalhes:**\n* Este especialista é focado exclusivamente em agendamento. Ele é acionado quando a intenção do paciente é marcar, remarcar ou cancelar uma consulta.\n* Sua principal inteligência está em analisar o histórico da conversa para identificar a especialidade correta, consultar o `Mapeamento de Agendas` para encontrar o ID do calendário certo e, então, usar as ferramentas do Google Calendar para gerenciar os eventos.\n**🔧 Ação Necessária:** Mantenha o `Mapeamento de Agendas` no prompt sempre atualizado com os IDs corretos das agendas do Google Calendar de cada profissional.",
+        "height": 276,
+        "width": 716,
+        "color": 4
+      },
+      "id": "42e5fd37-3c32-459b-8900-7ca8afc59a67",
+      "name": "Sticky Note77",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        1792
+      ]
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 176,
+        "width": 356,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -352,
+        2240
+      ],
+      "typeVersion": 1,
+      "id": "4832c586-ed5c-4cc7-93b4-b31b7a6542a4",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "#### **encaminhar_para_atendente_humano**\n*_(Tipo: HTTP Request Tool)_*\n**🎯 Objetivo:** Servir como a \"válvula de escape\" do sistema e finalizar o processo de agendamento.\n**📝 Detalhes:**\n* Esta ferramenta tem uma dupla função:\n    1.  É usada por qualquer agente quando ele não consegue responder a uma pergunta, transferindo a conversa para um atendente humano.\n    2.  É acionada **obrigatoriamente** pelo `agente_agendador` após um agendamento bem-sucedido, para notificar a equipe e garantir a continuidade do atendimento.\n**🔧 Ação Necessária:** Verifique se a URL do webhook para onde a requisição é enviada está correta e se o sistema de destino está preparado para receber os dados.",
+        "height": 404,
+        "width": 364,
+        "color": 4
+      },
+      "id": "9103bf6a-5f66-48fd-8b8b-acfbb299c191",
+      "name": "Sticky Note78",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -352,
+        2416
+      ]
+    },
+    {
+      "parameters": {
+        "content": "#### **agente_faq**\n*_(Tipo: LangChain AgentTool)_*\n**🎯 Objetivo:** Responder a perguntas frequentes (FAQ) sobre a clínica que não são relacionadas a procedimentos médicos.\n**📝 Detalhes:**\n* É o especialista em informações administrativas. Ele responde sobre endereço, horários de funcionamento, especialidades, convênios aceitos, localização, etc.\n\n",
+        "height": 356,
+        "width": 332,
+        "color": 4
+      },
+      "id": "a45a3aba-e56d-442c-806e-1a4b8efdc7b1",
+      "name": "Sticky Note80",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "content": "#### **agente_especialista_procedimentos**\n*_(Tipo: LangChain AgentTool)_*\n**🎯 Objetivo:** Atuar como um \"Dr. Virtual\", respondendo a dúvidas técnicas e detalhadas sobre os procedimentos e preparo.\n**📝 Detalhes:**\n* Este agente é acionado quando o paciente, tem alguma dúvida em relação ao preparo de procedimento\n* Ele responde estritamente com base na `Base de Conhecimento` em seu prompt, garantindo respostas seguras e padronizadas.\n**🔧 Ação Necessária:** A `Base de Conhecimento` deste agente deve ser constantemente enriquecida com as perguntas mais comuns dos pacientes para aumentar sua eficácia.",
+        "height": 436,
+        "width": 332,
+        "color": 4
+      },
+      "id": "8f967f15-dc67-4e02-97ca-f116baa496a3",
+      "name": "Sticky Note81",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        592,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 256,
+        "width": 1668,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1120,
+        1648
+      ],
+      "typeVersion": 1,
+      "id": "6d46a917-6b60-4f61-80d5-b1fbd23b71b0",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "                                           ",
+        "height": 1008,
+        "width": 916,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3360,
+        864
+      ],
+      "typeVersion": 1,
+      "id": "e4348f33-2cd1-4af6-8520-39fd95fc0559",
+      "name": "Sticky Note17"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d04a0c6e-7842-41d2-bdb0-c0ce51d6dad7",
+              "name": "numeroEquipe",
+              "value": "=5561998460743",
+              "type": "string"
+            },
+            {
+              "id": "64a4cea0-3765-4703-bf63-daf3b4722e29",
+              "name": "evoDomain",
+              "value": "https://medlago.uazapi.com",
+              "type": "string"
+            },
+            {
+              "id": "2bd58bf8-1037-4005-91a0-5c02368491fc",
+              "name": "evoInstance",
+              "value": "medlago-agente",
+              "type": "string"
+            },
+            {
+              "id": "13a36122-b1e4-4e9d-b45a-ec367a58bb93",
+              "name": "evoAPIKey",
+              "value": "2d114856-315c-433a-96fb-5012c852c3c1",
+              "type": "string"
+            },
+            {
+              "id": "ff02fda6-be65-49ca-8d5f-2f6881282a4b",
+              "name": "numeroLead",
+              "value": "={{ $json.headers.whatsapp }}",
+              "type": "string"
+            },
+            {
+              "id": "73980b41-997e-4de3-9664-f1c2b69de9b0",
+              "name": "resumoAtendimento",
+              "value": "={{ $json.headers.resumo }}",
+              "type": "string"
+            },
+            {
+              "id": "cbb604d2-10a3-4c6f-8761-15b7cd6504d0",
+              "name": "instanciaHumano",
+              "value": "ThiagoTesteMedlago",
+              "type": "string"
+            },
+            {
+              "id": "0fb7433b-0741-496c-9951-84bd4b159d25",
+              "name": "pausaAte",
+              "value": "={{ new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "9f44f91c-8c8d-4523-a9c5-2e1e6bc4771d",
+              "name": "motivo",
+              "value": "={{ $json.headers.motivo }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "26dc1d1b-4413-4ad8-a3d9-aca32411222a",
+      "name": "trataDados1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1408,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Execute a SQL query in PostgresUse esta ferramenta quando o usuário perguntar sobre um médico específico pelo nome, sobre uma especialidade médica ou quais médicos atendem determinada especialidade.\n\n**Busca por profissional:**\nExtraia somente o nome do profissional, removendo prefixos como Dr., Dra., Doutor ou Doutora, e envie no parâmetro medico_nome.\nExemplos:\n- \"O Dr. Alexandre atende?\" → medico_nome: \"Alexandre\"\n- \"A Dra. Maria trabalha aí?\" → medico_nome: \"Maria\"\n- \"Quero consultar com Moacyr Barbosa\" → medico_nome: \"Moacyr Barbosa\"\n- \"O doutor Luis Fernando atende?\" → medico_nome: \"Luis Fernando\"\n\n**Busca por especialidade:**\nExtraia somente o nome da especialidade e envie no parâmetro medico_nome.\nExemplos:\n- \"Vocês têm cardiologista?\" → medico_nome: \"Cardiologia\"\n- \"Preciso de um endocrinologista\" → medico_nome: \"Endocrinologia\"\n- \"Tem médico de coração?\" → medico_nome: \"Cardiologia\"\n- \"Quero consultar com um ginecologista\" → medico_nome: \"Ginecologia\"\n- \"Atende ortopedia?\" → medico_nome: \"Ortopedia\"\n- \"Quais médicos atendem angiologia?\" → medico_nome: \"Angiologia\"\n- \"Tem algum médico de angiologia?\" → medico_nome: \"Angiologia\"\n- \"Quem atende cardiologia?\" → medico_nome: \"Cardiologia\"\n- \"Me lista os médicos de ginecologia\" → medico_nome: \"Ginecologia\"\n\n**Importante:**\n- Não utilize esta ferramenta para buscar exames, procedimentos ou convênios.\n- Quando o usuário mencionar uma especialidade por linguagem informal (ex: \"médico de coração\", \"médico dos ossos\"), interprete e converta para o nome técnico correto antes de enviar.",
+        "operation": "executeQuery",
+        "query": "WITH profissional_especialidades AS (\n    SELECT \n        pe.profissional_id,\n        JSONB_AGG(\n            JSON_BUILD_OBJECT(\n                'id', e.id,\n                'nome', e.nome\n            ) ORDER BY e.nome\n        ) AS especialidades_list\n    FROM public.profissional_especialidade pe\n    JOIN public.especialidades e \n        ON pe.especialidade_id = e.id\n    GROUP BY pe.profissional_id\n)\nSELECT \n    p.id AS profissional_id,\n    p.nome AS profissional_nome,\n    COALESCE(pe.especialidades_list, '[]'::jsonb) AS especialidades\nFROM public.profissionais p\nLEFT JOIN profissional_especialidades pe \n    ON p.id = pe.profissional_id\n\n-- Filtra por especialidade quando necessário\nLEFT JOIN public.profissional_especialidade pe_filtro\n    ON p.id = pe_filtro.profissional_id\nLEFT JOIN public.especialidades e_filtro\n    ON pe_filtro.especialidade_id = e_filtro.id\n\nWHERE \n    -- FILTRO POR NOME DO PROFISSIONAL\n    unaccent(p.nome) ILIKE unaccent('%' || trim('{{ $fromAI(\"medico_nome\") }}') || '%')\n    OR\n    -- FILTRO POR ESPECIALIDADE\n    unaccent(e_filtro.nome) ILIKE unaccent('%' || trim('{{ $fromAI(\"medico_nome\") }}') || '%')\n\nGROUP BY \n    p.id, p.nome, pe.especialidades_list\n\nORDER BY \n    -- Prioriza match exato no nome do profissional\n    CASE \n        WHEN unaccent(p.nome) = unaccent(trim('{{ $fromAI(\"medico_nome\") }}')) THEN 0\n        -- Depois match exato na especialidade\n        WHEN MAX(unaccent(e_filtro.nome)) = unaccent(trim('{{ $fromAI(\"medico_nome\") }}')) THEN 1\n        -- Por último match parcial\n        ELSE 2\n    END,\n    p.nome\nLIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        432,
+        2112
+      ],
+      "id": "b0330efe-a524-4818-8b14-104d25b754db",
+      "name": "query_medico",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Busca preços de atendimento PARTICULAR (pagamento direto, sem convênio).\n\nUse quando o paciente disser que vai pagar particular ou não tem convênio.\n\nParâmetro:\n- procedimento_nome: nome do procedimento/consulta (deixe vazio \"\" para listar tudo)\n\nExemplos:\n\"Quanto custa particular?\" → procedimento_nome = \"\"\n\"Preço de cardiologia particular?\" → procedimento_nome = \"cardiologia\"\n\"Ultrassom particular?\" → procedimento_nome = \"ultrassom\"\n\nSempre mencione os descontos disponíveis (OAB, CRM, comerciantes).",
+        "operation": "executeQuery",
+        "query": "-- Busca preços de atendimento particular diretamente na tabela de precos\nSELECT \n    p.id as preco_id,\n    p.procedimento as procedimento_nome,\n    p.valor as valor_base,\n    p.tipo_item,\n    p.tipo_tabela,\n    -- Cálculos de descontos\n    ROUND(p.valor * (1 - COALESCE(p.desconto_oab, 0) / 100), 2) as valor_com_desconto_oab,\n    ROUND(p.valor * (1 - COALESCE(p.desconto_crm, 0) / 100), 2) as valor_com_desconto_crm,\n    ROUND(p.valor * (1 - COALESCE(p.desconto_comerciante, 0) / 100), 2) as valor_com_desconto_comerciante,\n    -- Informação percentual para o Agente citar se necessário\n    p.desconto_oab,\n    p.desconto_crm,\n    p.desconto_comerciante\nFROM public.precos p\nWHERE \n    UPPER(p.tipo_tabela) = 'PARTICULAR'\n    AND (\n        NULLIF('{{ $fromAI(\"procedimento_nome\") }}', '') IS NULL\n        OR unaccent(p.procedimento) ILIKE unaccent('%' || trim('{{ $fromAI(\"procedimento_nome\") }}') || '%')\n    )\nORDER BY \n    p.tipo_item,\n    p.procedimento\nLIMIT 50;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        608,
+        2112
+      ],
+      "id": "1507088e-e13d-4004-88a4-767fb13677dc",
+      "name": "query_precos_particular",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Execute a SQL query in PostgresBusca preços de atendimento por CONVÊNIO.\n\nUse quando o paciente informar que tem convênio médico.\n\nParâmetros:\n- nome_convenio: nome do convênio (obrigatório) - exemplos: \"Unimed\", \"Amil\", \"Bradesco\"\n- procedimento_nome: nome do procedimento (opcional, deixe \"\" para listar tudo)\n\nExemplos:\n\"Tenho Unimed\" → nome_convenio = \"Unimed\", procedimento_nome = \"\"\n\"Preço de cardiologia pela Amil\" → nome_convenio = \"Amil\", procedimento_nome = \"cardiologia\"",
+        "operation": "executeQuery",
+        "query": "-- Busca preços de atendimento por convênio usando apenas a tabela de precos e convenios\nSELECT \n    p.id as preco_id,\n    p.valor,\n    p.tipo_tabela,\n    p.tipo_item,\n    p.procedimento as procedimento_nome, -- Pega o nome direto da tabela de precos\n    c.convenio as convenio_nome,         -- Ajustado para a coluna correta da sua tabela de convenios\n    c.id as convenio_id\nFROM public.precos p\nINNER JOIN public.convenios c ON p.convenio_id = c.id\nWHERE \n    UPPER(p.tipo_tabela) = 'CONVENIO'\n    AND unaccent(c.convenio) ILIKE unaccent('%' || trim('{{ $fromAI(\"nome_convenio\") }}') || '%')\n    AND (\n        NULLIF('{{ $fromAI(\"procedimento_nome\") }}', '') IS NULL\n        OR unaccent(p.procedimento) ILIKE unaccent('%' || trim('{{ $fromAI(\"procedimento_nome\") }}') || '%')\n    )\nORDER BY \n    c.convenio,\n    p.procedimento\nLIMIT 50;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        784,
+        2112
+      ],
+      "id": "44ac52e1-f448-4cb2-96a4-7b1f2ac203a3",
+      "name": "query_precos_convenio",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Obtém convênio filtrando pelo nome do convênio com informações de cobertura e restrições.\n\nUse quando o paciente perguntar:\n- Quais convênios vocês aceitam?\n- O que o [convênio] cobre/não cobre?\n- Quais as restrições do [convênio]?\n- Vocês atendem [convênio]?\n\nParâmetro:\n- nome_convenio: nome do convênio (deixe vazio \"\" para listar todos, ou passe o nome para buscar específico)\n\nExemplos:\n\"Quais convênios aceitam?\" → nome_convenio = \"\"\n\"O que o Hapvida cobre?\" → nome_convenio = \"Hapvida\"\n\"Unimed tem restrições?\" → nome_convenio = \"Unimed\"\n\nA coluna restricoes_cobertura retorna um array com informações sobre o que é coberto e o que não é coberto. Interprete e apresente de forma clara.",
+        "operation": "executeQuery",
+        "query": "-- Busca convênio com informações de cobertura\nSELECT \n    c.id as convenio_id, c.convenio as nome_convenio\nFROM public.convenios c\nWHERE \n    (\n        NULLIF('{{ $fromAI(\"nome_convenio\") }}', '') IS NULL\n        OR UPPER(c.convenio) ILIKE '%' || UPPER('{{ $fromAI(\"nome_convenio\") }}') || '%'\n    )\nORDER BY c.convenio\nLIMIT 50;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        944,
+        2112
+      ],
+      "id": "823f88cf-8ea6-4769-9999-8c1e796d5d07",
+      "name": "query_convenios",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### **webhookRecebeTransferencia**\n*_(Tipo: Webhook)_*\n**🎯 Objetivo:** Servir como o ponto de entrada para o processo de transferência de atendimento.\n**📝 Detalhes:**\n* Este nó é ativado sempre que a ferramenta `encaminhar_para_atendente_humano` é acionada no seu workflow principal de IA.\n* Ele recebe os dados essenciais da IA, como o número do paciente e um resumo da conversa, para iniciar o processo de notificação da equipe.\n**🔧 Ação Necessária:** **CRÍTICO!** Você deve copiar a URL de produção (\"Production URL\") deste webhook e colá-la no campo `URL` do nó da ferramenta `encaminhar_para_atendente_humano` no seu outro workflow.\n\n### **trataDados1**\n*_(Tipo: Set)_*\n**🎯 Objetivo:** Organizar todos os dados necessários para o processo de notificação.\n**📝 Detalhes:**\n* Este nó extrai as informações dinâmicas recebidas pelo webhook (número do paciente e resumo do atendimento).\n* Ele também armazena suas variáveis fixas, como as credenciais da sua API do WhatsApp (Evolution API) e o número de telefone da sua equipe que receberá a notificação.\n**🔧 Ação Necessária:** Verifique e preencha as variáveis com seus dados corretos: `numeroEquipe`, `evoDomain`, `evoInstance` e `evoAPIKey`.\n\n### **pausaIaSupabase**\n*_(Tipo: Supabase)_*\n**🎯 Objetivo:** \"Desligar\" a IA para este paciente específico, evitando que ela continue respondendo enquanto um humano assume.\n**📝 Detalhes:**\n* Este nó se conecta ao seu banco de dados Supabase para encontrar o registro do chat do paciente (usando o número de telefone).\n* Ele atualiza uma coluna (ex: `ai_service`) para o status `pause`. Isso sinaliza para o seu sistema principal de webhook do WhatsApp que as mensagens deste número não devem mais ser enviadas para a IA.\n**🔧 Ação Necessária:** **CRÍTICO!** Certifique-se de que suas credenciais do Supabase estão corretas. Os nomes da tabela (`chats`) e das colunas (`phone`, `ai_service`) devem corresponder exatamente à estrutura do seu banco de dados.\n\n### **criaMensagemEquipe**\n*_(Tipo: Set)_*\n**🎯 Objetivo:** Montar uma mensagem de notificação clara e profissional para sua equipe de atendimento.\n**📝 Detalhes:**\n* Usando uma expressão JavaScript, este nó formata uma mensagem que inclui um link clicável do WhatsApp (`wa.me`) para o paciente e o resumo da conversa gerado pela IA.\n* Isso permite que sua equipe entenda o contexto rapidamente e inicie a conversa com apenas um clique.\n**🔧 Ação Necessária:** Você pode personalizar o texto da mensagem para se adequar à linguagem da sua equipe. Por exemplo, mudar \"*Lead precisa de atendimento*\" para \"*Paciente transferido pela IA*\".\n\n### **enviaMensagemParaEquipe**\n*_(Tipo: HTTP Request)_*\n**🎯 Objetivo:** Enviar a notificação final para o WhatsApp da sua equipe.\n**📝 Detalhes:**\n* Este é o nó que efetivamente dispara o alerta. Ele usa as credenciais e a URL da sua API do WhatsApp (Evolution) e envia a mensagem formatada no passo anterior para o número da sua equipe.\n**🔧 Ação Necessária:** Nenhuma, desde que os dados no nó `trataDados1` estejam corretos. Este nó apenas executa o envio.\n\n### **respondeWebhookTransferencia**\n*_(Tipo: Respond to Webhook)_*\n**🎯 Objetivo:** Finalizar o fluxo e confirmar que a transferência foi processada com sucesso.\n**📝 Detalhes:**\n* Este nó envia uma resposta de sucesso (HTTP 200 OK) de volta para a ferramenta `encaminhar_para_atendente_humano` no seu workflow de IA.\n* É uma etapa fundamental para garantir que o workflow principal não fique \"preso\" esperando uma resposta que nunca chegaria, o que poderia causar erros de timeout.\n**🔧 Ação Necessária:** Nenhuma. Apenas garanta que ele esteja no final do fluxo.",
+        "height": 1152,
+        "width": 1318,
+        "color": 4
+      },
+      "id": "7b4d78bb-a04d-45a7-b20d-36b1f4f0d20f",
+      "name": "Sticky Note84",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT token, expires_at \nFROM config_tokens \nWHERE service = 'igut_api' \n  AND expires_at > NOW()\nORDER BY updated_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1744,
+        1632
+      ],
+      "id": "3d541423-9f51-4d10-85a9-1d2d4fb9a631",
+      "name": "Buscar Token iGUT",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    paciente_nome, \n    id_convenio, \n    medico, \n    tipo_consulta, \n    TO_CHAR(data_consulta, 'DD/MM/YYYY HH24:MI') as data_formatada \nFROM public.vw_detalhe_consultas \nWHERE (\n    -- Busca exata por CPF\n    REGEXP_REPLACE(cpf, '\\D','','g') = REGEXP_REPLACE('{{ $json.cpf_paciente }}', '\\D','','g')\n) OR (\n    -- Busca inteligente por telefone\n    RIGHT(REGEXP_REPLACE(telefone_principal, '\\D','','g'), 11) = RIGHT(REGEXP_REPLACE('{{ $json.telefone_paciente }}', '\\D','','g'), 11)\n) \nORDER BY data_consulta DESC \nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        -496,
+        1408
+      ],
+      "id": "f20ad428-0a53-45ed-8bc6-da0d5e8e612a",
+      "name": "busca_paciente",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Use esta tool para buscar horários disponíveis na agenda. Você DEVE extrair e enviar os parâmetros: 'nome_convenio', 'nome_medico', 'especialidade', 'turno', 'atendimento_id', 'data_inicio' e 'data_fim'.\n\nREGRAS OBRIGATÓRIAS DE EXTRAÇÃO:\n1. Datas: Se a data for única, repita o mesmo valor em 'data_inicio' e 'data_fim'.\n2. Nome do Médico: Remova OBRIGATORIAMENTE qualquer prefixo ou título profissional (como \"Dr.\", \"Dra.\", \"Dr\", \"Dra\", \"Médico\"). Envie APENAS o nome próprio ou sobrenome. \n   - Exemplo: Se o usuário disser \"Dr. Cooperx\", envie apenas \"Cooperx\".",
+        "workflowId": {
+          "__rl": true,
+          "value": "Ti15LiLzS3d4MAFF",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Ti15LiLzS3d4MAFF",
+          "cachedResultName": "Tool - Busca Horarios"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome_medico": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nome_medico', ``, 'string') }}",
+            "nome_convenio": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nome_convenio', ``, 'string') }}",
+            "especialidade": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('especialidade', ``, 'string') }}",
+            "data_inicio": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('data_inicio', ``, 'string') }}",
+            "data_fim": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('data_fim', ``, 'string') }}",
+            "atendimento_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('atendimento_id', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome_medico",
+              "displayName": "nome_medico",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome_convenio",
+              "displayName": "nome_convenio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "especialidade",
+              "displayName": "especialidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data_inicio",
+              "displayName": "data_inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data_fim",
+              "displayName": "data_fim",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "atendimento_id",
+              "displayName": "atendimento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        1296
+      ],
+      "id": "a8f56960-d68c-47cf-b891-e15eda05c78e",
+      "name": "Horarios"
+    },
+    {
+      "parameters": {
+        "description": "Insira aqui o nome_convenio, tipo_atendimento, nome_medico, nome_convenio, especialidade, data_atendimento,horario, cpf_paciente que você identificou durante a conversa e Tópicos no seu prompt. ",
+        "workflowId": {
+          "__rl": true,
+          "value": "EgvLRy83WG3tdPLp",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/EgvLRy83WG3tdPLp",
+          "cachedResultName": "Tool - Agendamento"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome_medico": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nome_medico', ``, 'string') }}",
+            "nome_convenio": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nome_convenio', ``, 'string') }}",
+            "especialidade": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('especialidade', ``, 'string') }}",
+            "horario": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('horario', ``, 'string') }}",
+            "data_atendimento": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('data_atendimento', ``, 'string') }}",
+            "tipo_atendimento": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('tipo_atendimento', ``, 'string') }}",
+            "cpf_paciente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('cpf_paciente', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome_medico",
+              "displayName": "nome_medico",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "nome_convenio",
+              "displayName": "nome_convenio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "especialidade",
+              "displayName": "especialidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "horario",
+              "displayName": "horario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "data_atendimento",
+              "displayName": "data_atendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "tipo_atendimento",
+              "displayName": "tipo_atendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "cpf_paciente",
+              "displayName": "cpf_paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -64,
+        1344
+      ],
+      "id": "2fcb7d25-8f2e-413d-8a6e-58997113aa6c",
+      "name": "Agendamento"
+    },
+    {
+      "parameters": {
+        "description": "Obrigatória. Use esta ferramenta IMEDIATAMENTE após o paciente escolher um horário de agendamento e ANTES de chamar a tool 'Agendar'. Ela garante que o paciente esteja registrado no sistema oficial da clínica. Recebe o Nome Completo, CPF (apenas números) e WhatsApp. Mesmo que o paciente já tenha cadastro, esta tool deve ser executada para validar o registro e permitir o agendamento final. Segue regras dos daos que precisam ser coletados:\n- nome_paciente: \"Nome completo do paciente. (Obrigatório)\"\n\n- cpf_paciente: \"CPF do paciente (apenas números, 11 dígitos). (Obrigatório)\"\n\n- data_nascimento: \"Data de nascimento do paciente no formato DD/MM/AAAA. (Obrigatório)\"\n\n- celular_paciente: \"Número de celular/WhatsApp com DDD, apenas números. (Obrigatório)\"",
+        "workflowId": {
+          "__rl": true,
+          "value": "OGFo2N2azQbrX7Ud",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/OGFo2N2azQbrX7Ud",
+          "cachedResultName": "Tool - Cadastrar Paciente"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nome', ``, 'string') }}",
+            "cpf": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('cpf', ``, 'string') }}",
+            "data_nascimento": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('data_nascimento', ``, 'string') }}",
+            "celular": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('celular', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "cpf",
+              "displayName": "cpf",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "data_nascimento",
+              "displayName": "data_nascimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "celular",
+              "displayName": "celular",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        1296
+      ],
+      "id": "5530eb45-e566-4545-92ca-ea0d285b073d",
+      "name": "Cadastra_Paciente"
+    },
+    {
+      "parameters": {
+        "description": "Insira aqui cpf_paciente que você identificou durante a conversa e Tópicos no seu prompt quando o paciente decidir cancelar um agendamento",
+        "workflowId": {
+          "__rl": true,
+          "value": "5luGQufc0ncksRpK",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/5luGQufc0ncksRpK",
+          "cachedResultName": "Tool - Cancelar"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cpf_paciente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('cpf_paciente', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "cpf_paciente"
+          ],
+          "schema": [
+            {
+              "id": "cpf_paciente",
+              "displayName": "cpf_paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        16,
+        1504
+      ],
+      "id": "79c23230-7ca3-4989-8d62-1f2186ee2242",
+      "name": "Cancelar"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Recebe a especialidade médica informada pelo paciente e deve preencher obrigatoriamente o campo **URL** com o valor final da requisição.  \n\nRegra obrigatória:\n- O campo **URL** deve conter exclusivamente o termo citado pelo paciente como especialidade, em texto puro, sem incluir nomes de parâmetros, sem \"?especialidade=\", sem \"/\", sem URLs completas e sem qualquer formatação adicional.\n\nImportante:\n- Não corrigir, não inferir, não normalizar e não traduzir o termo.\n- Não adicionar prefixos, sufixos ou query strings.\n- A construção da URL final da requisição HTTP é responsabilidade exclusiva da tool, não da IA.\n\nExemplos corretos:\n- Paciente: \"Tem cardiologista?\" → URL = cardiologista  \n- Paciente: \"Quem atende cardiologia?\" → URL = cardiologia  \n- Paciente: \"Tem médico ginecologista?\" → URL = ginecologista  \n\nExemplos incorretos (NUNCA gerar):\n- URL = especialidade=cardiologista\n- URL = /especialidades?cardiologista\n- URL = https://api.exemplo.com/especialidades?cardiologista",
+        "url": "=https://api.igut.med.br/v2/callcenters/profissionais/{{ $fromAI('URL', ``, 'string') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client_token",
+              "value": "\tbWVkbGFnbw=="
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        2320
+      ],
+      "id": "513e8cf6-8a5f-47ef-9971-51cd3cbd26d6",
+      "name": "busca_especialidades_back",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Use esta ferramenta quando o usuário perguntar sobre um médico específico pelo nome, sobre uma especialidade médica ou quais médicos atendem determinada especialidade.\n\n**Busca por profissional:**\nExtraia somente o nome do profissional, removendo prefixos como Dr., Dra., Doutor ou Doutora, e envie no parâmetro medico_nome.\nExemplos:\n- \"O Dr. Alexandre atende?\" → medico_nome: \"Alexandre\"\n- \"A Dra. Maria trabalha aí?\" → medico_nome: \"Maria\"\n- \"Quero consultar com Moacyr Barbosa\" → medico_nome: \"Moacyr Barbosa\"\n- \"O doutor Luis Fernando atende?\" → medico_nome: \"Luis Fernando\"\n\n**Busca por especialidade:**\nExtraia somente o nome da especialidade e envie no parâmetro medico_nome.\nExemplos:\n- \"Vocês têm cardiologista?\" → medico_nome: \"Cardiologia\"\n- \"Preciso de um endocrinologista\" → medico_nome: \"Endocrinologia\"\n- \"Tem médico de coração?\" → medico_nome: \"Cardiologia\"\n- \"Quero consultar com um ginecologista\" → medico_nome: \"Ginecologia\"\n- \"Atende ortopedia?\" → medico_nome: \"Ortopedia\"\n- \"Quais médicos atendem angiologia?\" → medico_nome: \"Angiologia\"\n- \"Tem algum médico de angiologia?\" → medico_nome: \"Angiologia\"\n- \"Quem atende cardiologia?\" → medico_nome: \"Cardiologia\"\n- \"Me lista os médicos de ginecologia\" → medico_nome: \"Ginecologia\"\n\n**Importante:**\n- Não utilize esta ferramenta para buscar exames, procedimentos ou convênios.\n- Quando o usuário mencionar uma especialidade por linguagem informal (ex: \"médico de coração\", \"médico dos ossos\"), interprete e converta para o nome técnico correto antes de enviar.",
+        "operation": "executeQuery",
+        "query": "SELECT nome \nFROM public.especialidades\nWHERE \n  CASE \n    WHEN '{{ $fromAI(\"especialidade\") }}' = '' \n    THEN true\n    ELSE similarity(nome, '{{ $fromAI(\"especialidade\") }}') > 0.3\n  END\nORDER BY \n  CASE \n    WHEN '{{ $fromAI(\"especialidade\") }}' = '' \n    THEN 0\n    ELSE 1 - similarity(nome, '{{ $fromAI(\"especialidade\") }}')\n  END\nLIMIT 20;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        96,
+        2112
+      ],
+      "id": "c9c428d0-b5e7-4965-b7f8-0d29868d1860",
+      "name": "busca_especialidades",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Utilize esta ferramenta exclusivamente quando o usuário perguntar sobre a disponibilidade ou realização de um **procedimento clínico** específico, como aplicações, infiltrações, medicamentos injetáveis e protocolos terapêuticos.\n\n**Quando usar:**\n- Paciente pergunta sobre procedimentos injetáveis (ex: \"Vocês aplicam vitamina B12?\", \"Fazem infiltração?\")\n- Paciente pergunta sobre protocolos terapêuticos (ex: \"Tem protocolo de emagrecimento?\", \"Fazem protocolo metabólico?\")\n- Paciente pergunta sobre medicamentos aplicados na clínica (ex: \"Aplicam Cipionato?\", \"Tem ozonioterapia?\")\n\n**⚠️ Quando NÃO usar:**\n- Paciente pergunta sobre exames de imagem ou diagnósticos (ex: ultrassom, holter, ecocardiograma) → usar `query_exames`\n- Paciente pergunta sobre especialidades médicas → usar `busca_especialidades`\n- Paciente pergunta sobre preços → usar `query_precos_particular` ou `query_precos_convenio`\n\n**📥 Parâmetro obrigatório**\n- `procedimento`\n\n**📏 Regras do parâmetro:**\n- Extraia apenas o termo técnico principal, removendo verbos como \"fazer\", \"marcar\", \"agendar\", \"aplicar\".\n- Enviar em texto puro, sem símbolos ou formatação.\n\n**Exemplos:**\n- \"Vocês fazem infiltração?\" → `procedimento: \"Infiltração\"`\n- \"Aplicam vitamina B12?\" → `procedimento: \"Vitamina B12\"`\n- \"Tem protocolo ativador metabólico?\" → `procedimento: \"Protocolo Ativador Metabólico\"`\n- \"Fazem aplicação de Cipionato?\" → `procedimento: \"Cipionato\"`\n- \"Vocês fazem ozonioterapia?\" → `procedimento: \"Ozonioterapia\"`\n- \"Tem protocolo para emagrecimento?\" → `procedimento: \"Protocolo Emagrecimento\"`",
+        "operation": "executeQuery",
+        "query": "SELECT id, tipo_procedimento\nFROM public.procedimentos\nWHERE '{{ $fromAI(\"procedimento\") }}' != ''\n  AND similarity(tipo_procedimento, '{{ $fromAI(\"procedimento\") }}') > 0.3\nORDER BY tipo_procedimento <-> '{{ $fromAI(\"procedimento\") }}'\nLIMIT 1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        272,
+        2112
+      ],
+      "id": "559cd7eb-c493-454c-bc16-9723c23c649f",
+      "name": "query_procedimentos",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Use esta ferramenta quando o usuário perguntar sobre exames disponíveis na clínica.\n\n**Quando usar:**\n- Paciente pergunta se a clínica realiza determinado exame (ex: \"Vocês fazem ecocardiograma?\", \"Tem holter?\")\n- Paciente pergunta sobre exames de imagem, laboratoriais ou diagnósticos (ex: \"Fazem ultrassom?\", \"Tem doppler?\")\n- Paciente menciona o nome de um exame de forma incompleta ou informal (ex: \"exame do coração\", \"ultrassom da barriga\")\n\n**⚠️ Quando NÃO usar:**\n- Paciente pergunta sobre consultas médicas ou especialidades → usar `busca_especialidades`\n- Paciente pergunta sobre preços → usar `query_precos_particular` ou `query_precos_convenio`\n- Paciente pergunta sobre convênios aceitos → usar `query_convenios`\n\n**📥 Parâmetro obrigatório**\n- `exame`\n\n**📏 Regras do parâmetro:**\n- Enviar somente o nome do exame em texto puro, sem símbolos ou formatação.\n- Quando o paciente usar linguagem informal, converter para o nome técnico antes de enviar.\n  - \"exame do coração\" → `exame: \"Ecocardiograma\"`\n  - \"ultrassom da barriga\" → `exame: \"Ecografia de abdome\"`\n  - \"exame de pressão\" → `exame: \"Mapa 24h\"`\n  - \"exame do sono\" → `exame: \"Polissonografia\"`\n  - \"doppler das pernas\" → `exame: \"Doppler venoso dos membros inferiores\"`\n\n**Exemplos:**\n- \"Vocês fazem holter?\" → `exame: \"Holter 24h\"`\n- \"Tem ecocardiograma?\" → `exame: \"Ecocardiograma\"`\n- \"Fazem ultrassom de tireoide?\" → `exame: \"Ecografia de tireoide\"`\n- \"Têm exame de doppler?\" → `exame: \"Doppler\"`\n- \"Fazem PAAF?\" → `exame: \"PAAF\"`",
+        "operation": "executeQuery",
+        "query": "SELECT nome \nFROM public.exames \nWHERE '{{ $fromAI(\"exame\") }}' != '' \n  AND similarity(nome, '{{ $fromAI(\"exame\") }}') > 0.3\nORDER BY nome <-> '{{ $fromAI(\"exame\") }}'\nLIMIT 5;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        1088,
+        2112
+      ],
+      "id": "24adab7a-d358-4461-a715-7aafca4efa59",
+      "name": "query_exames",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Use esta ferramenta para verificar a disponibilidade de exames, tipos de consulta ou procedimentos específicos na clínica (ex: Telemedicina, Ecografias, Bioimpedância, Eletrocardiograma). Utilize esta tool quando o paciente perguntar 'vocês fazem tal exame?' ou 'quais tipos de X vocês atendem?'. O parâmetro deve ser o nome do atendimento ou procedimento.",
+        "operation": "executeQuery",
+        "query": "SELECT \n    id as atendimento_id,\n    nome as atendimento_nome\nFROM public.tipos_atendimento\nWHERE \n    -- Busca flexível ignorando acentos e espaços\n    unaccent(nome) ILIKE unaccent('%' || trim('{{ $fromAI(\"termo_busca\") }}') || '%')\nORDER BY \n    -- Prioriza quem começa exatamente com o termo pesquisado\n    CASE WHEN unaccent(nome) ILIKE unaccent(trim('{{ $fromAI(\"termo_busca\") }}') || '%') THEN 0 ELSE 1 END,\n    nome\nLIMIT 20;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        2320
+      ],
+      "id": "ba7aabd9-2f53-43e6-875f-36f4b56637f1",
+      "name": "query_tipo_atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Busca as instruções de preparo para exames médicos com base no nome informado pelo cliente.\nUse quando o cliente perguntar sobre como se preparar para um exame específico.\nRetorna as orientações organizadas por categoria (Alimentação, Roupas, Observação, Medicamentos).\n\nRequer os parâmetros:\n- exame: nome ou parte do nome do exame informado pelo cliente (string, obrigatório)\n\nESTRUTURA DO RETORNO:\n- 'exame': nome do exame\n- 'categoria': tipo de orientação\n- 'descricao': instrução detalhada\n\nApresente as orientações agrupadas por categoria de forma clara e organizada.\nNUNCA invente orientações que não vieram do retorno desta tool.",
+        "operation": "executeQuery",
+        "query": "SELECT \n  exame,\n  categoria,\n  descricao\nFROM preparo_exames\nWHERE '{{ $fromAI(\"exame\") }}' != ''\n  AND similarity(exame, '{{ $fromAI(\"exame\") }}') > 0.3\nORDER BY exame <-> '{{ $fromAI(\"exame\") }}'\nLIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        864,
+        1888
+      ],
+      "id": "9bca4da1-0443-487d-b824-daa81dc64c84",
+      "name": "busca_preparos",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE chats \nSET \n  ai_service = 'paused',\n  updated_at = '{{ $('trataDados1').item.json.pausaAte }}'\nWHERE phone = '{{ $('trataDados1').item.json.numeroLead }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1600,
+        1744
+      ],
+      "id": "0eefad78-731c-4e48-b756-3d144892d7d4",
+      "name": "pausaIAPostgre",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('trataDados1').item.json.evoDomain }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('trataDados1').item.json.evoAPIKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('trataDados1').item.json.numeroLead }}"
+            },
+            {
+              "name": "text",
+              "value": "👤 Vou te transferir para um dos nossos atendentes agora.\\n\\nEm breve entrarão em contato com você. Obrigado pela paciência! 😊"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d5d07600-4b5b-45ce-b2ef-00b46ead96bd",
+      "name": "enviaMensagemCliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1856,
+        1744
+      ],
+      "retryOnFail": false,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Consulta quais médicos atendem determinado convênio, se um médico específico atende determinado convênio, ou quais convênios um médico aceita. Use quando o paciente relacionar médico com convênio em qualquer combinação.\n",
+        "operation": "executeQuery",
+        "query": "SELECT \n    p.nome AS medico,\n    c.convenio AS convenio\nFROM profissionais_convenios pc\nJOIN profissionais p ON p.id::text = pc.profissional_id::text\nJOIN convenios c ON c.id::text = pc.convenio_id::text\nWHERE \n    CASE \n        WHEN '{{ $fromAI(\"medico\") }}' != '' AND '{{ $fromAI(\"convenio\") }}' = ''\n        THEN similarity(p.nome, '{{ $fromAI(\"medico\") }}') > 0.2\n\n        WHEN '{{ $fromAI(\"convenio\") }}' != '' AND '{{ $fromAI(\"medico\") }}' = ''\n        THEN similarity(c.convenio, '{{ $fromAI(\"convenio\") }}') > 0.2\n          OR c.convenio ILIKE '%' || '{{ $fromAI(\"convenio\") }}' || '%'\n\n        WHEN '{{ $fromAI(\"medico\") }}' != '' AND '{{ $fromAI(\"convenio\") }}' != ''\n        THEN similarity(p.nome, '{{ $fromAI(\"medico\") }}') > 0.2\n          AND (\n            similarity(c.convenio, '{{ $fromAI(\"convenio\") }}') > 0.2\n            OR c.convenio ILIKE '%' || '{{ $fromAI(\"convenio\") }}' || '%'\n          )\n\n        ELSE false\n    END\nORDER BY \n    p.nome, c.convenio;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        1248,
+        2176
+      ],
+      "id": "7c55ea50-80d2-4ff8-9737-82d26980fc23",
+      "name": "query_medico_convenio",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use esta ferramenta para transferir a conversa para um atendente humano da nossa equipe.\n\n**Acione OBRIGATORIAMENTE nos seguintes casos:**\n1. Paciente quiser AGENDAR um exame (ex: \"Quero marcar um ultrassom\", \"Pode agendar um holter?\", \"Quero agendar um ecocardiograma\")\n2. Paciente insistir em falar com um atendente humano (ex: \"Quero falar com uma pessoa\", \"Me passa para um atendente\")\n3. Nenhuma das ferramentas disponíveis retornar a informação solicitada pelo paciente\n\n**⚠️ Parâmetros obrigatórios — NUNCA acione sem os dois:**\n- `whatsapp`: número do paciente com DDD (somente números, sem símbolos)\n- `resumo`: resumo completo da conversa até o momento, incluindo o que o paciente perguntou, o que foi respondido e o motivo da transferência\n- `motivo`: um dos três valores abaixo:\n  - \"Agendamento de exame\"\n  - \"Atendimento humano solicitado\"\n  - \"Informação não encontrada\"\n\n**Exemplos de acionamento:**\n- \"Quero marcar um ultrassom\" → motivo: \"Agendamento de exame\"\n- \"Quero falar com um atendente\" → motivo: \"Atendimento humano solicitado\"\n- \"Ferramenta não retornou resultado\" → motivo: \"Informação não encontrada\"",
+        "method": "POST",
+        "url": "https://autowebhook.tiait.com.br/webhook/recebe-input-encaminhado-clinica",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "whatsapp",
+              "value": "={{ $('agrupaDados').first().json.telefone }}"
+            },
+            {
+              "name": "resumo",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Resumo básico da conversa com o lead.`, 'string') }}"
+            },
+            {
+              "name": "motivo",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Motivo da transferência. Valores possíveis: \n\"Agendamento de exame\", \n\"Atendimento humano solicitado\", \n\"Informação não encontrada\"`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        2336
+      ],
+      "id": "bd13161a-c7ee-45af-a1e7-65aa42058638",
+      "name": "encaminhar_para_atendente_humano1",
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "inputTest": {
+      "main": [
+        [
+          {
+            "node": "trataDados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "trataDados": {
+      "main": [
+        [
+          {
+            "node": "agrupaDados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "recebeDadosExternos": {
+      "main": [
+        [
+          {
+            "node": "agrupaDados",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "agrupaDados": {
+      "main": [
+        [
+          {
+            "node": "Buscar Token iGUT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openai4.1Mini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "agente_roteador",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "agente_agendador",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "agente_faq",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "agente_especialista_procedimentos",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "agente_roteador",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "agente_faq",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "agente_agendador",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "agente_especialista_procedimentos",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agente_agendador": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_roteador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agente_faq": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_roteador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agente_especialista_procedimentos": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_roteador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think1": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "webhookRecebeTransferencia": {
+      "main": [
+        [
+          {
+            "node": "trataDados1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "criaMensagemEquipe": {
+      "main": [
+        [
+          {
+            "node": "enviaMensagemParaEquipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviaMensagemParaEquipe": {
+      "main": [
+        [
+          {
+            "node": "respondeWebhookTransferencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "encaminhar_para_atendente_humano": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "agente_especialista_procedimentos",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "agente_roteador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "trataDados1": {
+      "main": [
+        [
+          {
+            "node": "pausaIAPostgre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_medico": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_precos_particular": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_precos_convenio": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_convenios": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Token iGUT": {
+      "main": [
+        [
+          {
+            "node": "agente_roteador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "busca_paciente": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horarios": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendamento": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadastra_Paciente": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_agendador",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "busca_especialidades_back": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "busca_especialidades": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_procedimentos": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_exames": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_tipo_atendimento": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "busca_preparos": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_especialista_procedimentos",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pausaIAPostgre": {
+      "main": [
+        [
+          {
+            "node": "enviaMensagemCliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviaMensagemCliente": {
+      "main": [
+        [
+          {
+            "node": "criaMensagemEquipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_medico_convenio": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente_faq",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c6ee97aa-b72b-4f54-b40b-40bc50fef9df",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "QkojhAJKkRHjxsth",
+  "tags": []
+}

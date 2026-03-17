@@ -23,7 +23,7 @@ export async function PUT(
         });
 
         return NextResponse.json({
-            user: { ...user, id: user.id.toString(), created_at: user.created_at.toISOString() },
+            user: { ...user, id: user.id.toString(), created_at: user.created_at?.toISOString() || null },
         });
     } catch (error) {
         console.error("Erro ao editar usuário:", error);

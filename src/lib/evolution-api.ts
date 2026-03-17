@@ -6,6 +6,17 @@ interface SendMessageParams {
     text: string;
 }
 
+export interface SendMediaOptions {
+    domain: string;
+    apiKey: string;
+    instance: string;
+    number: string;
+    mediaUrl: string;
+    mediaType: "image" | "video" | "audio" | "document" | string;
+    fileName?: string;
+    caption?: string;
+}
+
 export async function sendEvolutionMessage({
     domain,
     apiKey,
@@ -109,4 +120,44 @@ export async function sendReactivationMessage(phone: string): Promise<void> {
         number: phone,
         text: "🤖 O atendimento automático foi reativado! Estou pronto para ajudá-lo novamente. Como posso te ajudar? 😊",
     });
+}
+
+// Enviar Mídia (Imagem, Áudio, Arquivo)
+export async function sendMediaMessage(options: SendMediaOptions): Promise<void> {
+    const { domain, apiKey, instance, number, mediaUrl, mediaType, fileName, caption } = options;
+    const cleanDomain = domain.replace(/\/+$/, '');
+    const url = `${cleanDomain}/send/media`;
+
+    // Payload no formato Uazapi: campo "file" (URL ou base64), "type", "caption", "fileName"
+    // Uazapi usa "myaudio" para áudios em vez de "audio"
+    const uazapiType = mediaType === 'audio' ? 'myaudio' : mediaType;
+    const payload: any = {
+        number,
+        file: mediaUrl,
+        type: uazapiType,
+    };
+
+    if (fileName) payload.fileName = fileName;
+    if (caption) payload.caption = caption;
+
+    console.log(`[Uazapi] Payload Media (${mediaType}):`, JSON.stringify({ ...payload, file: "TRUNCATED_URL" }));
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'token': apiKey,
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Uazapi] Erro HTTP ${response.status}:`, errorText);
+        throw new Error(`Falha ao enviar mídia Evolution API (Status ${response.status}): ${errorText}`);
+    }
+
+    const responseData = await response.json();
+    console.log(`[Uazapi] Resposta Media:`, JSON.stringify(responseData));
+    return responseData;
 }

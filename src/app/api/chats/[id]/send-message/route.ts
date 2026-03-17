@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendEvolutionMessage } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
@@ -9,6 +10,10 @@ export async function POST(
         const { id } = await params;
         const chatId = BigInt(id);
         const { message } = await request.json();
+
+        // Capturar usuário logado dos headers (setados pelo middleware)
+        const userId = request.headers.get("x-user-id");
+        const userIdBigInt = userId ? BigInt(userId) : null;
 
         if (!message?.trim()) {
             return NextResponse.json({ error: "Mensagem não pode ser vazia" }, { status: 400 });
@@ -21,34 +26,34 @@ export async function POST(
 
         const phone = chat.phone;
 
-        // 1. Enviar mensagem via Evolution API (instância bot)
+        // 1. Enviar mensagem via UAZAPI
         try {
-            const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
-            const EVO_API_KEY = process.env.EVO_API_KEY!;
-
-            await fetch(`${EVO_DOMAIN}/send/text`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    token: EVO_API_KEY,
-                },
-                body: JSON.stringify({ number: phone, text: message.trim() }),
+            await sendEvolutionMessage({
+                domain: process.env.EVO_DOMAIN || "",
+                apiKey: process.env.EVO_API_KEY!,
+                instance: process.env.EVO_INSTANCE_BOT || "",
+                number: phone,
+                text: message.trim(),
             });
         } catch (evoErr) {
-            console.error("Erro ao enviar via Evolution API:", evoErr);
+            console.error("Erro ao enviar via UAZAPI:", evoErr);
         }
 
-        // 2. Pausar IA: ai_service = 'paused', updated_at = NOW() + 24h
+        // 2. Pausar IA + atribuir atendente (se identificado)
         const pauseUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
         await prisma.chat.update({
             where: { id: chatId },
             data: {
                 ai_service: "paused",
                 updated_at: pauseUntil,
+                ...(userIdBigInt ? {
+                    assigned_to: userIdBigInt,
+                    assigned_at: new Date(),
+                } : {}),
             },
         });
 
-        // 3. Registrar mensagem enviada na tabela chat_messages
+        // 3. Registrar mensagem enviada
         const newMsg = await prisma.chatMessage.create({
             data: {
                 phone,

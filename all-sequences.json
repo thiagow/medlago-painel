@@ -1,0 +1,68 @@
+[
+  {
+    "sequence_name": "chat_transfer_logs_id_seq"
+  },
+  {
+    "sequence_name": "base_conhecimento_id_seq"
+  },
+  {
+    "sequence_name": "precos_id_seq"
+  },
+  {
+    "sequence_name": "user_departments_id_seq"
+  },
+  {
+    "sequence_name": "external_contacts_id_seq"
+  },
+  {
+    "sequence_name": "pacote_itens_id_seq"
+  },
+  {
+    "sequence_name": "departments_id_seq"
+  },
+  {
+    "sequence_name": "config_tokens_id_seq"
+  },
+  {
+    "sequence_name": "medico_procedimentos_id_seq"
+  },
+  {
+    "sequence_name": "procedimentos_id_seq"
+  },
+  {
+    "sequence_name": "chats_id_seq"
+  },
+  {
+    "sequence_name": "procedimentos_id_seq1"
+  },
+  {
+    "sequence_name": "preparo_exames_id_seq"
+  },
+  {
+    "sequence_name": "roles_id_seq"
+  },
+  {
+    "sequence_name": "medicos_id_seq"
+  },
+  {
+    "sequence_name": "convenios_id_seq"
+  },
+  {
+    "sequence_name": "users_id_seq"
+  },
+  {
+    "sequence_name": "n8n_chat_histories_id_seq"
+  },
+  {
+    "sequence_name": "consultas_consulta_id_seq"
+  },
+  {
+    "sequence_name": "chat_messages_id_seq"
+  },
+  {
+    "sequence_name": "especialidades_id_seq"
+  },
+  {
+    "sequence_name": "exames_id_seq"
+  }
+]

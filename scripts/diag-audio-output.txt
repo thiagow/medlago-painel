@@ -1,0 +1,19 @@
+﻿=== CONFIGURA├ç├âO ===
+EVO_DOMAIN: https://medlago.uazapi.com
+EVO_API_KEY: 2d114856...
+R2_PUBLIC_URL: https://cdf14b94b8c0ac515dcfaf0bc806fe4f.r2.cloudflarestorage.com
+R2_BUCKET_NAME: medlago
+
+URL simulada do R2: https://cdf14b94b8c0ac515dcfaf0bc806fe4f.r2.cloudflarestorage.com/documentos/audio-TESTE.webm
+
+=== TESTANDO UAZAPI /send/media ===
+URL Uazapi: https://medlago.uazapi.com/send/media
+Payload: {"number":"+55 61 9678-5733","file":"https://cdf14b94b8c0ac515dcfaf0bc806fe4f.r2.cloudflarestorag...","type":"myaudio"}
+Status: 500
+Resposta: {"error":"failed to process file: error fetching file from URL: HTTP 400: 400 Bad Request"}
+
+
+--- Agora com URL p├║blica de MP3 ---
+Status MP3 p├║blico: 200
+Resposta: {"chatid":"556196785733@s.whatsapp.net","content":{"URL":"https://mmg.whatsapp.net/v/t62.7114-24/653688169_2387652788407469_8576527844445724604_n.enc?ccb=11-4\u0026oh=01_Q5Aa4AH3DpNv5b0pYTw38Sj_q82yLVdXPI9KM7FuDOk-osJ99A\u0026oe=69DED018\u0026_nc_sid=5e03e0\u0026mms3=true","mimetype":"audio/ogg; codecs=opus","fileSHA256":"JSEFWYnHxCX+Jtrc57KtjrVjRJlPtaoY2pTilLDyjjM=","fileLength":6698253,"seconds":373,"PTT":true,"mediaKey":"o2pS1f59VcCtb/K7rqQJE5X2YkpZzIuMjovJmWVH+qQ=","fileEncSHA256":"fz1rt5C+ytBGJvqtUeEbye30n9LZNanqs2xReE1G6u8=","directPath":"/v/t62.7114-24/653688169_2387652788407469_8576527844445724604_n.enc?ccb=11-4\u0026oh=01_Q5Aa4AH3DpNv5b0pYTw38Sj_q82yLVdXPI9KM7FuDOk-osJ99A\u0026oe=69DED018\u0026_nc_sid=5e03e0","contextInfo":{},"waveform":"Gk7LFnS6+ufLkyx+56qwluwBsU5QgyC0iL783HR0f9EgjDTilZwhZh4PVb7bFG3SzYUbg+t5I5lNCaGpGq0tyKH877YGGGOKzZvExCSt2UC4lsP6iZUYsKOmf21f8DJp7f3yRA=="},"convertOptions":"","edited":"","fromMe":true,"id":"556181409241:3EB07CC5A2F25328850805","isGroup":false,"messageTimestamp":1773627354722,"messageType":"AudioMessage","messageid":"3EB07CC5A2F25328850805","owner":"556181409241","quoted":"","reaction":"","readChatAttempted":false,"sender":"556181409241@s.whatsapp.net","senderName":"Cl├¡nica MEDLAGO","source":"web","status":"Pending","text":"","track_id":"","track_source":""}
+

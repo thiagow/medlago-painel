@@ -1,0 +1,42 @@
+{
+  "columns": [
+    {
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "user_id",
+      "data_type": "bigint",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "department_id",
+      "data_type": "bigint",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "user_departments_department_id_fkey",
+      "pg_get_constraintdef": "FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "user_departments_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "user_departments_user_id_department_id_key",
+      "pg_get_constraintdef": "UNIQUE (user_id, department_id)"
+    },
+    {
+      "conname": "user_departments_user_id_fkey",
+      "pg_get_constraintdef": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    }
+  ]
+}

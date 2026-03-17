@@ -1,0 +1,110 @@
+[
+  {
+    "table_name": "base_conhecimento"
+  },
+  {
+    "table_name": "chat_messages"
+  },
+  {
+    "table_name": "chat_transfer_logs"
+  },
+  {
+    "table_name": "chats"
+  },
+  {
+    "table_name": "config_tokens"
+  },
+  {
+    "table_name": "consultas"
+  },
+  {
+    "table_name": "convenios"
+  },
+  {
+    "table_name": "convenios_back"
+  },
+  {
+    "table_name": "departments"
+  },
+  {
+    "table_name": "especialidades"
+  },
+  {
+    "table_name": "exames"
+  },
+  {
+    "table_name": "external_contacts"
+  },
+  {
+    "table_name": "medico_convenio"
+  },
+  {
+    "table_name": "medico_procedimentos"
+  },
+  {
+    "table_name": "medicos"
+  },
+  {
+    "table_name": "medicos_rpa"
+  },
+  {
+    "table_name": "n8n_chat_histories"
+  },
+  {
+    "table_name": "pacientes"
+  },
+  {
+    "table_name": "pacote_itens"
+  },
+  {
+    "table_name": "precos"
+  },
+  {
+    "table_name": "preparo_exames"
+  },
+  {
+    "table_name": "procedimentos"
+  },
+  {
+    "table_name": "procedimentos_rpa"
+  },
+  {
+    "table_name": "profissionais"
+  },
+  {
+    "table_name": "profissionais_convenios"
+  },
+  {
+    "table_name": "profissional_especialidade"
+  },
+  {
+    "table_name": "roles"
+  },
+  {
+    "table_name": "tipos_atendimento"
+  },
+  {
+    "table_name": "user_departments"
+  },
+  {
+    "table_name": "users"
+  },
+  {
+    "table_name": "v_estatisticas_medico_procedimentos"
+  },
+  {
+    "table_name": "v_medicos_procedimentos"
+  },
+  {
+    "table_name": "v_pacotes"
+  },
+  {
+    "table_name": "v_pacotes_detalhados"
+  },
+  {
+    "table_name": "v_procedimentos"
+  },
+  {
+    "table_name": "vw_detalhe_consultas"
+  }
+]

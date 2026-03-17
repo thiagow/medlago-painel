@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         const serialized = users.map((u) => ({
             ...u,
             id: u.id.toString(),
-            created_at: u.created_at.toISOString(),
+            created_at: u.created_at?.toISOString() || null,
         }));
 
         return NextResponse.json({ users: serialized });
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         });
 
         return NextResponse.json({
-            user: { ...user, id: user.id.toString(), created_at: user.created_at.toISOString() },
+            user: { ...user, id: user.id.toString(), created_at: user.created_at?.toISOString() || null },
         });
     } catch (error) {
         console.error("Erro ao criar usuário:", error);

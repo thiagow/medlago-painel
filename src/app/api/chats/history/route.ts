@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
         const search = searchParams.get("search") || "";
         const startDate = searchParams.get("startDate");
         const endDate = searchParams.get("endDate");
+        const status = searchParams.get("status");
         const page = parseInt(searchParams.get("page") || "1");
         const limit = parseInt(searchParams.get("limit") || "50");
         const skip = (page - 1) * limit;
@@ -16,6 +17,15 @@ export async function GET(request: NextRequest) {
 
         if (search) {
             where.phone = { contains: search };
+        }
+
+        if (status) {
+            if (status === "finished") {
+                where.finished = true;
+            } else {
+                where.ai_service = status;
+                where.finished = false;
+            }
         }
 
         if (startDate && endDate) {
@@ -39,12 +49,15 @@ export async function GET(request: NextRequest) {
             prisma.chat.count({ where }),
         ]);
 
-        // Serializar BigInt
+        // Serializar BigInt e datas
         const serialized = chats.map((chat) => ({
             ...chat,
             id: chat.id.toString(),
-            created_at: chat.created_at?.toISOString() || null,
-            updated_at: chat.updated_at?.toISOString() || null,
+            assigned_to: chat.assigned_to?.toString() ?? null,
+            department_id: chat.department_id?.toString() ?? null,
+            created_at: chat.created_at?.toISOString?.() ?? (chat.created_at ? new Date(chat.created_at).toISOString() : null),
+            updated_at: chat.updated_at?.toISOString?.() ?? (chat.updated_at ? new Date(chat.updated_at).toISOString() : null),
+            assigned_at: chat.assigned_at?.toISOString?.() ?? (chat.assigned_at ? new Date(chat.assigned_at).toISOString() : null),
         }));
 
         return NextResponse.json({

@@ -13,12 +13,14 @@ interface Chat {
     ai_service: string | null;
     created_at: string | null;
     updated_at: string | null;
+    finished: boolean | null;
 }
 
 export default function HistoryPage() {
     const router = useRouter();
     const [chats, setChats] = useState<Chat[]>([]);
     const [search, setSearch] = useState("");
+    const [status, setStatus] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [loading, setLoading] = useState(false);
@@ -28,6 +30,7 @@ export default function HistoryPage() {
         try {
             const params = new URLSearchParams({ limit: "100" });
             if (search) params.append("search", search);
+            if (status) params.append("status", status);
             if (startDate) params.append("startDate", startDate);
             if (endDate) params.append("endDate", endDate);
 
@@ -41,7 +44,7 @@ export default function HistoryPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, startDate, endDate]);
+    }, [search, status, startDate, endDate]);
 
     useEffect(() => {
         // Busca inicial ou sempre que os filtros mudarem (poderia usar um botão Buscar tbm)
@@ -63,8 +66,17 @@ export default function HistoryPage() {
         }
     };
 
-    const renderStatusBadge = (service: string | null) => {
-        const s = String(service || "").toLowerCase();
+    const renderStatusBadge = (chat: Chat) => {
+        if (chat.finished) {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Finalizado
+                </span>
+            );
+        }
+
+        const s = String(chat.ai_service || "").toLowerCase();
 
         if (s === "active" || s === "true") {
             return (
@@ -108,11 +120,11 @@ export default function HistoryPage() {
         <div className="flex flex-col h-full overflow-hidden bg-slate-950 p-6 md:p-8 max-w-7xl mx-auto w-full">
             <div className="mb-8">
                 <h1 className="text-2xl font-bold text-white mb-2">Histórico de Atendimentos</h1>
-                <p className="text-slate-400">Pesquise por todas as conversas e atendimentos finalizados.</p>
+                <p className="text-slate-400">Pesquise por todas as conversas e atendimentos.</p>
             </div>
 
             {/* Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
                 <div className="md:col-span-2 relative">
                     <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
@@ -141,6 +153,26 @@ export default function HistoryPage() {
                         onChange={(e) => setEndDate(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [color-scheme:dark]"
                     />
+                </div>
+
+                <div className="relative">
+                    <select
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [&>option]:bg-slate-900"
+                    >
+                        <option value="">Status</option>
+                        <option value="active">🟢 IA Ativa</option>
+                        <option value="paused">🟠 Humano</option>
+                        <option value="transferred">🔴 Transferido</option>
+                        <option value="finished">⚫ Finalizado</option>
+                    </select>
+                    {/* SVG Chevron */}
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                        </svg>
+                    </div>
                 </div>
             </div>
 
@@ -181,7 +213,7 @@ export default function HistoryPage() {
                                         <div className="font-medium text-white">{formatPhone(chat.phone)}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        {renderStatusBadge(chat.ai_service)}
+                                        {renderStatusBadge(chat)}
                                     </td>
                                 </tr>
                             ))}

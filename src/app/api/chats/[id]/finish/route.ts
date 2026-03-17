@@ -20,7 +20,8 @@ export async function POST(
         await prisma.chat.update({
             where: { id: chatId },
             data: {
-                ai_service: "finished",
+                ai_service: "paused",
+                finished: true,
                 updated_at: new Date(),
             },
         });

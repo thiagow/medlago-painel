@@ -1,0 +1,33 @@
+{
+  "parameters": {
+    "toolDescription": "Use esta ferramenta para transferir a conversa para um atendente humano da nossa equipe.\n\n**Acione OBRIGATORIAMENTE nos seguintes casos:**\n1. Paciente quiser AGENDAR um exame (ex: \"Quero marcar um ultrassom\", \"Pode agendar um holter?\", \"Quero agendar um ecocardiograma\")\n2. Paciente insistir em falar com um atendente humano (ex: \"Quero falar com uma pessoa\", \"Me passa para um atendente\")\n3. Nenhuma das ferramentas disponíveis retornar a informação solicitada pelo paciente\n\n**⚠️ Parâmetros obrigatórios — NUNCA acione sem os dois:**\n- `whatsapp`: número do paciente com DDD (somente números, sem símbolos)\n- `resumo`: resumo completo da conversa até o momento, incluindo o que o paciente perguntou, o que foi respondido e o motivo da transferência\n- `motivo`: um dos três valores abaixo:\n  - \"Agendamento de exame\"\n  - \"Atendimento humano solicitado\"\n  - \"Informação não encontrada\"\n\n**Exemplos de acionamento:**\n- \"Quero marcar um ultrassom\" → motivo: \"Agendamento de exame\"\n- \"Quero falar com um atendente\" → motivo: \"Atendimento humano solicitado\"\n- \"Ferramenta não retornou resultado\" → motivo: \"Informação não encontrada\"",
+    "method": "POST",
+    "url": "https://autowebhook.tiait.com.br/webhook/recebe-input-encaminhado-clinica",
+    "sendHeaders": true,
+    "headerParameters": {
+      "parameters": [
+        {
+          "name": "whatsapp",
+          "value": "={{ $('agrupaDados').first().json.telefone }}"
+        },
+        {
+          "name": "resumo",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Resumo básico da conversa com o lead.`, 'string') }}"
+        },
+        {
+          "name": "motivo",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Motivo da transferência. Valores possíveis: \n\"Agendamento de exame\", \n\"Atendimento humano solicitado\", \n\"Informação não encontrada\"`, 'string') }}"
+        }
+      ]
+    },
+    "options": {}
+  },
+  "type": "n8n-nodes-base.httpRequestTool",
+  "typeVersion": 4.2,
+  "position": [
+    -208,
+    2256
+  ],
+  "id": "99b09094-bf4a-493f-a6f4-7f1e7854b528",
+  "name": "encaminhar_para_atendente_humano"
+}

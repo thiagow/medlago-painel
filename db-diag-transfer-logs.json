@@ -1,0 +1,49 @@
+{
+  "columns": [
+    {
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "chat_id",
+      "data_type": "bigint",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "department_id",
+      "data_type": "bigint",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "external_contact_id",
+      "data_type": "bigint",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "summary",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "transfer_type",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "user_name",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "reason",
+      "data_type": "text",
+      "is_nullable": "NO"
+    }
+  ]
+}

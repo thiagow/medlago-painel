@@ -126,7 +126,7 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-800/50">
                             <div className="flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                <span className="text-slate-300 font-medium">Evolution API (Bot)</span>
+                                <span className="text-slate-300 font-medium">Instância Whatsapp</span>
                             </div>
                             <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400">Online</span>
                         </div>

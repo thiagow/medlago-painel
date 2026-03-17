@@ -1,0 +1,46 @@
+﻿=== CHATS PAUSADOS (Aba Humano) ===
+[
+  {
+    "id": "97",
+    "phone": "+55 61 9678-5733",
+    "ai_service": "paused"
+  },
+  {
+    "id": "114",
+    "phone": "+55 21 98269-5777",
+    "ai_service": "paused"
+  },
+  {
+    "id": "99",
+    "phone": "+55 61 9877-7104",
+    "ai_service": "paused"
+  }
+]
+
+Telefone analisado: +55 61 9678-5733
+
+=== ESTAT├ìSTICAS ===
+[
+  {
+    "total": 2,
+    "with_user_msg": 2,
+    "with_bot_msg": 2,
+    "with_both": 2,
+    "user_only": 0,
+    "bot_only": 0
+  }
+]
+
+=== AMOSTRA com AMBOS campos preenchidos ===
+[
+  {
+    "id": "745",
+    "user_msg": "algum retorno ?",
+    "bot_msg": ""
+  },
+  {
+    "id": "742",
+    "user_msg": "quais especialidades vcs tem ?",
+    "bot_msg": "Estou verificando as especialidades aten"
+  }
+]
