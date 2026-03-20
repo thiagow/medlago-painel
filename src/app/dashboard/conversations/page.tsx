@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -23,7 +23,9 @@ import {
     X,
     Loader2,
     Mic,
-    Square
+    Square,
+    ArrowLeft,
+    Menu
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -39,6 +41,8 @@ interface Chat {
     assigned_to: string | null;
     assigned_user_name: string | null;
     department_name: string | null;
+    finished: boolean | null;
+    status?: string | null;
 }
 
 interface Message {
@@ -64,6 +68,7 @@ export default function ConversationsPage() {
 
 function ConversationsContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const chatIdQuery = searchParams.get("chatId");
 
     const [chats, setChats] = useState<Chat[]>([]);
@@ -87,7 +92,27 @@ function ConversationsContent() {
     const [finishing, setFinishing] = useState(false);
     const [showConfirm, setShowConfirm] = useState<"transfer" | "reactivate" | "finish" | null>(null);
     const [waitingCount, setWaitingCount] = useState(0);
+    const prevWaitingCountRef = useRef<number>(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Toca um bip curto quando chega novo atendimento em espera
+    function playAlertSound() {
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            osc.type = "sine";
+            // Aumentado para 1.2 segundos para ser mais perceptível
+            gain.gain.setValueAtTime(0.25, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 1.2);
+            osc.onended = () => ctx.close();
+        } catch { /* browser sem suporte a AudioContext */ }
+    }
     const [transferReason, setTransferReason] = useState("");
     const [transferSummary, setTransferSummary] = useState("");
     const [transferType, setTransferType] = useState<"human" | "external">("human");
@@ -162,11 +187,20 @@ function ConversationsContent() {
         }
     }, [search, tab]);
 
+    // Função para trocar de aba limpando o contexto da aba anterior
+    const handleTabChange = useCallback((newTab: "ai" | "waiting" | "human") => {
+        if (newTab === tab) return;
+        setSelectedChat(null);
+        setMessages([]);
+        setTab(newTab);
+    }, [tab]);
+
     // Reseta página e chats quando os filtros mudam
     useEffect(() => {
         setPage(1);
         setHasMore(true);
         fetchChats(1, false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search, tab, fetchChats]);
 
     const loadMoreChats = useCallback(() => {
@@ -227,21 +261,29 @@ function ConversationsContent() {
         return () => clearInterval(interval);
     }, [fetchChats, page]);
 
-    // Polling a cada 15 segundos para contagem de chats em espera
+    // Polling a cada 10 segundos para contagem de chats em espera
     const fetchWaitingCount = useCallback(async () => {
         try {
             const res = await fetch(`/api/chats/count?_t=${Date.now()}`, { cache: "no-store" });
             if (!res.ok) return;
             const data = await res.json();
-            setWaitingCount(data.waiting ?? 0);
+            const newCount: number = data.waiting ?? 0;
+
+            // Detecta aumento: se aumentou E usuário não está na aba Em Espera, alerta sonoro
+            if (newCount > prevWaitingCountRef.current && tab !== "waiting") {
+                playAlertSound();
+            }
+            prevWaitingCountRef.current = newCount;
+            setWaitingCount(newCount);
         } catch {
             // Silencia erros de rede para não poluir o console
         }
-    }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab]);
 
     useEffect(() => {
         fetchWaitingCount();
-        const interval = setInterval(fetchWaitingCount, 15000);
+        const interval = setInterval(fetchWaitingCount, 10000);
         return () => clearInterval(interval);
     }, [fetchWaitingCount]);
 
@@ -369,11 +411,17 @@ function ConversationsContent() {
         try {
             const res = await fetch(`/api/chats/${selectedChat.id}/assume`, { method: "POST" });
             if (!res.ok) throw new Error();
+            const data = await res.json();
             toast.success("Atendimento assumido com sucesso!");
-            // Move o chat para aba "Humano"
-            setChats((prev) => prev.filter((c) => c.id !== selectedChat.id));
-            setSelectedChat(null);
-            setMessages([]);
+            // Atualizar o chat selecionado com os dados retornados pela API (agora ai_service="paused")
+            const updatedChat: Chat = {
+                ...selectedChat,
+                ai_service: "paused",
+                assigned_to: data.chat?.assigned_to ?? selectedChat.assigned_to,
+                assigned_user_name: data.chat?.assigned_user_name ?? selectedChat.assigned_user_name,
+            };
+            setSelectedChat(updatedChat);
+            // Mudar para aba "human" — o useEffect de [tab] vai recarregar a lista
             setTab("human");
         } catch {
             toast.error("Erro ao assumir atendimento");
@@ -543,6 +591,8 @@ function ConversationsContent() {
         }
     };
 
+    const isHistoryView = selectedChat ? (selectedChat.finished || ["finished", "transferred_external", "transferred"].includes(String(selectedChat.status || selectedChat.ai_service))) : false;
+
     return (
         <div className="flex h-full overflow-hidden">
             {/* Confirmation Modal */}
@@ -662,7 +712,7 @@ function ConversationsContent() {
             )}
 
             {/* Painel Esquerdo - Lista de Conversas */}
-            <div className="w-80 border-r border-slate-800 bg-slate-900/50 flex flex-col shrink-0">
+            <div className={`w-80 border-r border-slate-800 bg-slate-900/50 flex flex-col shrink-0 ${isHistoryView ? 'hidden' : ''}`}>
                 <div className="p-4 border-b border-slate-800">
                     <div className="flex items-center gap-2 mb-4">
                         <h2 className="text-lg font-semibold text-white">Conversas</h2>
@@ -683,7 +733,7 @@ function ConversationsContent() {
                         </div>
                         <div className="flex gap-1 p-1 bg-slate-800 rounded-xl">
                             <button
-                                onClick={() => { setTab("ai"); setPage(1); setHasMore(true); }}
+                                onClick={() => handleTabChange("ai")}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                     tab === "ai" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"
                                 }`}
@@ -691,7 +741,7 @@ function ConversationsContent() {
                                 Atend. IA
                             </button>
                             <button
-                                onClick={() => { setTab("waiting"); setPage(1); setHasMore(true); }}
+                                onClick={() => handleTabChange("waiting")}
                                 className={`flex-1 relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                     tab === "waiting"
                                         ? "bg-orange-600 text-white shadow"
@@ -708,7 +758,7 @@ function ConversationsContent() {
                                 )}
                             </button>
                             <button
-                                onClick={() => { setTab("human"); setPage(1); setHasMore(true); }}
+                                onClick={() => handleTabChange("human")}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                     tab === "human" ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"
                                 }`}
@@ -777,11 +827,25 @@ function ConversationsContent() {
                         {/* Chat Header */}
                         <div className="h-16 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 shrink-0 bg-slate-900">
                             <div className="flex items-center gap-3">
+                                {isHistoryView && (
+                                    <button 
+                                        onClick={() => router.push('/dashboard/history')} 
+                                        className="mr-2 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center justify-center bg-slate-800/50"
+                                        title="Voltar ao Histórico"
+                                    >
+                                        <ArrowLeft className="w-5 h-5" />
+                                    </button>
+                                )}
                                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
                                     <Phone className="w-4 h-4 text-white" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-white">{formatPhone(selectedChat.phone)}</p>
+                                    <p className="text-sm font-semibold text-white">
+                                        {formatPhone(selectedChat.phone)}
+                                        {isHistoryView && (
+                                            <span className="ml-2 px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded border border-slate-700">Somente Leitura</span>
+                                        )}
+                                    </p>
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service).badgeClass}`}>
                                             {getStatusInfo(selectedChat.ai_service).emoji} {getStatusInfo(selectedChat.ai_service).label}
@@ -810,50 +874,52 @@ function ConversationsContent() {
                                 >
                                     <RefreshCw className="w-4 h-4" />
                                 </button>
-                                {selectedChat.ai_service === "waiting" ? (
-                                    // Em Espera: apenas botão Assumir
-                                    <button
-                                        id="btn-assume-chat"
-                                        onClick={handleAssume}
-                                        disabled={assuming}
-                                        className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
-                                    >
-                                        <UserCheck className="w-4 h-4" />
-                                        <span className="hidden sm:block">{assuming ? "Assumindo..." : "Assumir Atendimento"}</span>
-                                    </button>
-                                ) : selectedChat.ai_service === "paused" ? (
-                                    // Atendimento Humano ativo: Transferir + Finalizar (sem Reativar IA)
-                                    <>
+                                {!isHistoryView && (
+                                    selectedChat.ai_service === "waiting" ? (
+                                        // Em Espera: apenas botão Assumir
                                         <button
-                                            id="btn-transfer-department"
+                                            id="btn-assume-chat"
+                                            onClick={handleAssume}
+                                            disabled={assuming}
+                                            className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                        >
+                                            <UserCheck className="w-4 h-4" />
+                                            <span className="hidden sm:block">{assuming ? "Assumindo..." : "Assumir Atendimento"}</span>
+                                        </button>
+                                    ) : selectedChat.ai_service === "paused" ? (
+                                        // Atendimento Humano ativo: Transferir + Finalizar (sem Reativar IA)
+                                        <>
+                                            <button
+                                                id="btn-transfer-department"
+                                                onClick={openTransferModal}
+                                                disabled={transferring}
+                                                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                            >
+                                                <UserCheck className="w-4 h-4" />
+                                                <span className="hidden sm:block">Transferir</span>
+                                            </button>
+                                            <button
+                                                id="btn-finish-chat"
+                                                onClick={() => setShowConfirm("finish")}
+                                                disabled={finishing}
+                                                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                            >
+                                                <CheckCircle className="w-4 h-4" />
+                                                <span className="hidden sm:block">Finalizar</span>
+                                            </button>
+                                        </>
+                                    ) : (
+                                        // IA ativa: Transferir para Humano
+                                        <button
+                                            id="btn-transfer-human"
                                             onClick={openTransferModal}
                                             disabled={transferring}
                                             className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
                                         >
                                             <UserCheck className="w-4 h-4" />
-                                            <span className="hidden sm:block">Transferir</span>
+                                            <span className="hidden sm:block">Transferir para Humano</span>
                                         </button>
-                                        <button
-                                            id="btn-finish-chat"
-                                            onClick={() => setShowConfirm("finish")}
-                                            disabled={finishing}
-                                            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
-                                        >
-                                            <CheckCircle className="w-4 h-4" />
-                                            <span className="hidden sm:block">Finalizar</span>
-                                        </button>
-                                    </>
-                                ) : (
-                                    // IA ativa: Transferir para Humano
-                                    <button
-                                        id="btn-transfer-human"
-                                        onClick={openTransferModal}
-                                        disabled={transferring}
-                                        className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium transition-all disabled:opacity-60"
-                                    >
-                                        <UserCheck className="w-4 h-4" />
-                                        <span className="hidden sm:block">Transferir para Humano</span>
-                                    </button>
+                                    )
                                 )}
                             </div>
                         </div>
@@ -981,79 +1047,91 @@ function ConversationsContent() {
                         </div>
 
                         {/* Send Message Area */}
-                        <div className="border-t border-slate-800 flex flex-col bg-slate-900 shrink-0">
-                            {/* Preview anexo */}
-                            {attachment && (
-                                <div className="px-4 pt-3 flex items-center gap-3">
-                                    <div className="relative bg-slate-800 p-2 rounded-lg border border-slate-700 flex items-center gap-3">
-                                        <div className="p-2 bg-blue-500/10 rounded-md">
-                                            {attachment.type.startsWith("image/") ? <ImageIcon className="w-5 h-5 text-blue-400" /> 
-                                            : attachment.type.startsWith("audio/") ? <FileAudio className="w-5 h-5 text-amber-400" />
-                                            : <FileText className="w-5 h-5 text-indigo-400" />}
+                        {isHistoryView ? (
+                            <div className="p-4 flex flex-col items-center justify-center bg-slate-900 border-t border-slate-800 shrink-0 select-none h-24">
+                                <span className="text-slate-500 font-medium flex items-center gap-2 text-sm">
+                                    <CheckCircle className="w-4 h-4" />
+                                    Atendimento Finalizado
+                                </span>
+                                <span className="text-slate-600 text-xs mt-1">
+                                    Histórico disponível apenas para visualização.
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="border-t border-slate-800 flex flex-col bg-slate-900 shrink-0">
+                                {/* Preview anexo */}
+                                {attachment && (
+                                    <div className="px-4 pt-3 flex items-center gap-3">
+                                        <div className="relative bg-slate-800 p-2 rounded-lg border border-slate-700 flex items-center gap-3">
+                                            <div className="p-2 bg-blue-500/10 rounded-md">
+                                                {attachment.type.startsWith("image/") ? <ImageIcon className="w-5 h-5 text-blue-400" /> 
+                                                : attachment.type.startsWith("audio/") ? <FileAudio className="w-5 h-5 text-amber-400" />
+                                                : <FileText className="w-5 h-5 text-indigo-400" />}
+                                            </div>
+                                            <div className="flex flex-col max-w-[200px]">
+                                                <span className="text-sm font-medium text-slate-200 truncate">{attachment.name}</span>
+                                                <span className="text-xs text-slate-500">{(attachment.size / 1024).toFixed(1)} KB</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => setAttachment(null)} 
+                                                className="absolute -top-2 -right-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-full p-1"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
                                         </div>
-                                        <div className="flex flex-col max-w-[200px]">
-                                            <span className="text-sm font-medium text-slate-200 truncate">{attachment.name}</span>
-                                            <span className="text-xs text-slate-500">{(attachment.size / 1024).toFixed(1)} KB</span>
-                                        </div>
-                                        <button 
-                                            onClick={() => setAttachment(null)} 
-                                            className="absolute -top-2 -right-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-full p-1"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Forms Message */}
-                            <form onSubmit={handleSendMessage} className="p-4 flex gap-3 items-center">
-                                {/* Upload hidden */}
-                                <input 
-                                    type="file" 
-                                    ref={fileInputRef} 
-                                    className="hidden" 
-                                    onChange={(e) => {
-                                        if (e.target.files && e.target.files[0]) {
-                                            setAttachment(e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Anexar arquivo ou imagem"
-                                    className="p-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
-                                >
-                                    <Paperclip className="w-5 h-5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={isRecording ? stopRecording : startRecording}
-                                    title={isRecording ? "Parar gravação" : "Gravar áudio"}
-                                    className={`p-3 rounded-xl transition-all ${isRecording ? "bg-red-600 text-white animate-pulse" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-                                >
-                                    {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                                </button>
+                                {/* Forms Message */}
+                                <form onSubmit={handleSendMessage} className="p-4 flex gap-3 items-center">
+                                    {/* Upload hidden */}
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        className="hidden" 
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                setAttachment(e.target.files[0]);
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        title="Anexar arquivo ou imagem"
+                                        className="p-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+                                    >
+                                        <Paperclip className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={isRecording ? stopRecording : startRecording}
+                                        title={isRecording ? "Parar gravação" : "Gravar áudio"}
+                                        className={`p-3 rounded-xl transition-all ${isRecording ? "bg-red-600 text-white animate-pulse" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                    >
+                                        {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                                    </button>
 
-                                <input
-                                    id="message-input"
-                                    type="text"
-                                    value={messageInput}
-                                    onChange={(e) => setMessageInput(e.target.value)}
-                                    placeholder={attachment ? "Digite uma legenda (opcional)..." : "Digite sua mensagem..."}
-                                    disabled={sendingMessage}
-                                    className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
-                                />
-                                <button
-                                    id="btn-send-message"
-                                    type="submit"
-                                    disabled={sendingMessage || (!messageInput.trim() && !attachment)}
-                                    className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all disabled:opacity-60 flex items-center gap-2"
-                                >
-                                    {uploadingMedia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                </button>
-                            </form>
-                        </div>
+                                    <input
+                                        id="message-input"
+                                        type="text"
+                                        value={messageInput}
+                                        onChange={(e) => setMessageInput(e.target.value)}
+                                        placeholder={attachment ? "Digite uma legenda (opcional)..." : "Digite sua mensagem..."}
+                                        disabled={sendingMessage}
+                                        className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
+                                    />
+                                    <button
+                                        id="btn-send-message"
+                                        type="submit"
+                                        disabled={sendingMessage || (!messageInput.trim() && !attachment)}
+                                        className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all disabled:opacity-60 flex items-center gap-2"
+                                    >
+                                        {uploadingMedia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

@@ -1,0 +1,27 @@
+
+=== pacientes ===
+id | bigint
+nome | character varying
+cpf | character varying
+data_nascimento | date
+email | character varying
+telefone_principal | character varying
+id_convenio | text
+nr_carteirinha | character varying
+total_consultas | integer
+primeira_consulta | timestamp without time zone
+ultima_consulta | timestamp without time zone
+
+=== profissionais ===
+id | bigint
+nome | character varying
+
+=== tipos_atendimento ===
+id | integer
+nome | character varying
+
+=== convenios ===
+id | bigint
+convenio | character varying
+data_criacao | timestamp without time zone
+data_atualizacao | timestamp without time zone

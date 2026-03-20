@@ -11,6 +11,7 @@ interface Chat {
     phone: string | null;
     email: string | null;
     ai_service: string | null;
+    status: string | null;
     created_at: string | null;
     updated_at: string | null;
     finished: boolean | null;
@@ -67,41 +68,8 @@ export default function HistoryPage() {
     };
 
     const renderStatusBadge = (chat: Chat) => {
-        if (chat.finished) {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    Finalizado
-                </span>
-            );
-        }
+        const s = chat.status || (chat.finished ? "finished" : chat.ai_service) || "";
 
-        const s = String(chat.ai_service || "").toLowerCase();
-
-        if (s === "active" || s === "true") {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <Bot className="w-3.5 h-3.5" />
-                    Ativa
-                </span>
-            );
-        }
-        if (s === "paused") {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <UserCheck className="w-3.5 h-3.5" />
-                    Humano
-                </span>
-            );
-        }
-        if (s === "transferred") {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                    <ArrowRightLeft className="w-3.5 h-3.5" />
-                    Transferido
-                </span>
-            );
-        }
         if (s === "finished") {
             return (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
@@ -110,6 +78,39 @@ export default function HistoryPage() {
                 </span>
             );
         }
+        if (s === "ai" || s === "active") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <Bot className="w-3.5 h-3.5" />
+                    IA Ativa
+                </span>
+            );
+        }
+        if (s === "human" || s === "paused") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    Humano
+                </span>
+            );
+        }
+        if (s === "waiting") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Aguardando
+                </span>
+            );
+        }
+        if (s === "transferred_external" || s === "transferred") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                    Transf. Externo
+                </span>
+            );
+        }
+        
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
                 Desconhecido
@@ -161,11 +162,12 @@ export default function HistoryPage() {
                         onChange={(e) => setStatus(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [&>option]:bg-slate-900"
                     >
-                        <option value="">Status</option>
-                        <option value="active">🟢 IA Ativa</option>
-                        <option value="paused">🟠 Humano</option>
-                        <option value="transferred">🔴 Transferido</option>
-                        <option value="finished">⚫ Finalizado</option>
+                        <option value="">Todos</option>
+                        <option value="ai">🤖 IA Ativa</option>
+                        <option value="waiting">⏳ Em Espera</option>
+                        <option value="human">👤 Humano</option>
+                        <option value="transferred_external">📞 Transf. Externo</option>
+                        <option value="finished">✅ Finalizado</option>
                     </select>
                     {/* SVG Chevron */}
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">

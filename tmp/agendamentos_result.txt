@@ -1,0 +1,26 @@
+COLUNAS:
+id | integer
+created_at | timestamp with time zone
+updated_at | timestamp with time zone
+convenio_id | bigint
+profissional_id | bigint
+tipo_atendimento_id | integer
+data_atendimento | date
+horario | time without time zone
+unidade_id | integer
+paciente_cpf | character varying
+status | character varying
+
+SAMPLE:
+id: 2
+created_at: Thu Mar 19 2026 18:36:19 GMT-0300 (Horário Padrão de Brasília)
+updated_at: Thu Mar 19 2026 18:36:19 GMT-0300 (Horário Padrão de Brasília)
+convenio_id: 88
+profissional_id: 2009913528
+tipo_atendimento_id: 2
+data_atendimento: Wed Mar 18 2026 21:00:00 GMT-0300 (Horário Padrão de Brasília)
+horario: Thu Jan 01 1970 11:30:00 GMT-0300 (Horário Padrão de Brasília)
+unidade_id: 1
+paciente_cpf: 165.218.418-48
+status: agendado
+---

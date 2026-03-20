@@ -56,6 +56,7 @@ export async function POST(
                 where: { id: chatId },
                 data: {
                     ai_service: "waiting",
+                    status: "waiting",
                     finished: false,
                     ...(department_id ? { department_id: BigInt(department_id) } : {}),
                     updated_at: new Date(),
@@ -71,7 +72,7 @@ export async function POST(
 
         } else {
             // ── TRANSFERÊNCIA EXTERNA ─────────────────────────────
-            // Finaliza o chat, IA volta ativa para criar novo atendimento no próximo contato
+            // Finaliza o chat e registra como transferido externamente
 
             // Obter telefone do contato externo
             let externalPhone: string | null = null;
@@ -105,13 +106,18 @@ export async function POST(
                 }
             }
 
-            // Finalizar chat — IA volta ativa para próximo contato
+            const now = new Date();
+
+            // Finalizar chat com status dedicado para transferência externa
             await prisma.chat.update({
                 where: { id: chatId },
                 data: {
                     ai_service: "paused",
+                    status: "transferred_external",
                     finished: true,
-                    updated_at: new Date(),
+                    finished_at: now,
+                    ...(userIdBigInt ? { finished_by: userIdBigInt } : {}),
+                    updated_at: now,
                 },
             });
 

@@ -16,6 +16,7 @@ import {
     Phone,
     ChevronDown,
     ChevronRight,
+    CalendarDays,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -67,6 +68,12 @@ export default function DashboardLayout({
             icon: Clock,
             label: "Histórico",
             id: "nav-history",
+        },
+        {
+            href: "/dashboard/agendamentos",
+            icon: CalendarDays,
+            label: "Agendamentos",
+            id: "nav-agendamentos",
         },
         ...(isAdmin()
             ? [

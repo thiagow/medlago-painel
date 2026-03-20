@@ -17,12 +17,23 @@ export async function GET(
             return NextResponse.json({ error: "Chat não encontrado" }, { status: 404 });
         }
 
-        const serialized = {
+        const serialized: any = {
             ...chat,
             id: chat.id.toString(),
-            created_at: chat.created_at?.toISOString() || null,
-            updated_at: chat.updated_at?.toISOString() || null,
         };
+
+        // Convert BigInts to strings
+        for (const [key, value] of Object.entries(serialized)) {
+            if (typeof value === 'bigint') {
+                serialized[key] = value.toString();
+            }
+        }
+
+        // Convert Dates to ISO strings
+        serialized.created_at = chat.created_at?.toISOString() || null;
+        serialized.updated_at = chat.updated_at?.toISOString() || null;
+        serialized.assigned_at = chat.assigned_at?.toISOString() || null;
+        serialized.finished_at = chat.finished_at?.toISOString() || null;
 
         return NextResponse.json({ chat: serialized });
     } catch (error) {

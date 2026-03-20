@@ -34,6 +34,7 @@ export async function POST(
             where: { id: chatId },
             data: {
                 ai_service: "paused",
+                status: "human",
                 finished: false,
                 assigned_to: BigInt(userId),
                 assigned_at: new Date(),
@@ -58,6 +59,7 @@ export async function POST(
                 ...updated,
                 id: updated.id.toString(),
                 assigned_to: updated.assigned_to?.toString() ?? null,
+                assigned_user_name: userName,
                 department_id: updated.department_id?.toString() ?? null,
                 created_at: updated.created_at?.toISOString() ?? null,
                 updated_at: updated.updated_at?.toISOString() ?? null,

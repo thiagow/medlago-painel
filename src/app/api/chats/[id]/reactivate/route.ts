@@ -20,7 +20,11 @@ export async function POST(
         // 1. Reativar IA no banco
         await prisma.chat.update({
             where: { id: chatId },
-            data: { ai_service: "active" },
+            data: {
+                ai_service: "active",
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                status: "ai" as any,
+            },
         });
 
         // 2. Reativar mensagens do telefone

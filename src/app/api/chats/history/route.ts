@@ -20,12 +20,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (status) {
-            if (status === "finished") {
-                where.finished = true;
-            } else {
-                where.ai_service = status;
-                where.finished = false;
-            }
+            where.status = status;
         }
 
         if (startDate && endDate) {
@@ -55,9 +50,11 @@ export async function GET(request: NextRequest) {
             id: chat.id.toString(),
             assigned_to: chat.assigned_to?.toString() ?? null,
             department_id: chat.department_id?.toString() ?? null,
+            finished_by: chat.finished_by?.toString() ?? null,
             created_at: chat.created_at?.toISOString?.() ?? (chat.created_at ? new Date(chat.created_at).toISOString() : null),
             updated_at: chat.updated_at?.toISOString?.() ?? (chat.updated_at ? new Date(chat.updated_at).toISOString() : null),
             assigned_at: chat.assigned_at?.toISOString?.() ?? (chat.assigned_at ? new Date(chat.assigned_at).toISOString() : null),
+            finished_at: chat.finished_at?.toISOString?.() ?? (chat.finished_at ? new Date(chat.finished_at).toISOString() : null),
         }));
 
         return NextResponse.json({

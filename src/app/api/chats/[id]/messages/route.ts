@@ -16,9 +16,12 @@ export async function GET(
         if (!chat) {
             return NextResponse.json({ error: "Conversa não encontrada" }, { status: 404 });
         }
+        if (!chat.conversation_id) {
+            return NextResponse.json({ messages: [] });
+        }
 
         const messages = await prisma.chatMessage.findMany({
-            where: { phone: chat.phone! },
+            where: { conversation_id: chat.conversation_id },
             orderBy: { created_at: "asc" },
         });
 
