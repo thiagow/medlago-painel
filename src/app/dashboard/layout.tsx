@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import UpdatePasswordModal from "@/components/profile/UpdatePasswordModal";
 import {
     MessageSquare,
     Users,
@@ -17,6 +18,7 @@ import {
     ChevronDown,
     ChevronRight,
     CalendarDays,
+    Key,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -28,6 +30,7 @@ export default function DashboardLayout({
     const router = useRouter();
     const pathname = usePathname();
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -74,6 +77,12 @@ export default function DashboardLayout({
             icon: CalendarDays,
             label: "Agendamentos",
             id: "nav-agendamentos",
+        },
+        {
+            href: "/dashboard/patients",
+            icon: Users, // Pode usar Múltiplos ou Contact (importarei se necessário)
+            label: "Pacientes",
+            id: "nav-patients",
         },
         ...(isAdmin()
             ? [
@@ -188,6 +197,13 @@ export default function DashboardLayout({
                         </div>
                     </div>
                     <button
+                        onClick={() => setPasswordModalOpen(true)}
+                        className="w-full flex items-center justify-center md:justify-start gap-2 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all group text-sm mb-1"
+                    >
+                        <Key className="w-4 h-4 shrink-0" />
+                        <span className="hidden md:block">Trocar Senha</span>
+                    </button>
+                    <button
                         id="btn-logout"
                         onClick={logout}
                         className="w-full flex items-center justify-center md:justify-start gap-2 px-3 py-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all group text-sm"
@@ -202,6 +218,11 @@ export default function DashboardLayout({
             <main className="flex-1 overflow-hidden flex flex-col min-w-0">
                 {children}
             </main>
+
+            <UpdatePasswordModal 
+                isOpen={passwordModalOpen} 
+                onClose={() => setPasswordModalOpen(false)} 
+            />
         </div>
     );
 }
