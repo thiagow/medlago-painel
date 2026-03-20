@@ -18,6 +18,7 @@ import {
     ChevronDown,
     ChevronRight,
     CalendarDays,
+    Send,
     Key,
 } from "lucide-react";
 
@@ -91,6 +92,12 @@ export default function DashboardLayout({
                     icon: Users,
                     label: "Usuários",
                     id: "nav-users",
+                },
+                {
+                    href: "/dashboard/broadcasts",
+                    icon: Send,
+                    label: "Disparos",
+                    id: "nav-broadcasts",
                 },
             ]
             : []),

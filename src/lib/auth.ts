@@ -59,6 +59,7 @@ export const PERMISSIONS = {
         "transfer_to_human",
         "reactivate_ai",
         "manage_users",
+        "manage_broadcasts",
     ],
     atendente: [
         "view_chats",
