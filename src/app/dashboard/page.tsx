@@ -165,7 +165,7 @@ export default function DashboardPage() {
             text: "text-orange-400",
         },
         {
-            label: "Atendimento Humano",
+            label: "Atendimento Equipe",
             sublabel: "Em aberto por agentes",
             value: bs.human,
             icon: UserCheck,
@@ -210,7 +210,7 @@ export default function DashboardPage() {
     const donutData = [
         { label: "IA", value: bs.ai, color: "#3b82f6" },
         { label: "Aguardando", value: bs.waiting, color: "#f97316" },
-        { label: "Humano", value: bs.human, color: "#f59e0b" },
+        { label: "Equipe", value: bs.human, color: "#f59e0b" },
         { label: "Finalizados", value: bs.finished, color: "#10b981" },
         { label: "Transf. Externo", value: bs.transferred_external, color: "#8b5cf6" },
     ];
@@ -218,7 +218,7 @@ export default function DashboardPage() {
     const donutLegend = [
         { label: "IA", color: "bg-blue-500", value: bs.ai },
         { label: "Aguardando", color: "bg-orange-500", value: bs.waiting },
-        { label: "Humano", color: "bg-amber-500", value: bs.human },
+        { label: "Equipe", color: "bg-amber-500", value: bs.human },
         { label: "Finalizados", color: "bg-emerald-500", value: bs.finished },
         { label: "Transf. Ext.", color: "bg-violet-500", value: bs.transferred_external },
     ];

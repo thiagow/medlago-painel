@@ -90,7 +90,7 @@ export default function HistoryPage() {
             return (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
                     <UserCheck className="w-3.5 h-3.5" />
-                    Humano
+                    Equipe
                 </span>
             );
         }
@@ -165,7 +165,7 @@ export default function HistoryPage() {
                         <option value="">Todos</option>
                         <option value="ai">🤖 IA Ativa</option>
                         <option value="waiting">⏳ Em Espera</option>
-                        <option value="human">👤 Humano</option>
+                        <option value="human">👥 Equipe</option>
                         <option value="transferred_external">📞 Transf. Externo</option>
                         <option value="finished">✅ Finalizado</option>
                     </select>

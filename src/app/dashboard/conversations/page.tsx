@@ -524,7 +524,7 @@ function ConversationsContent() {
     const getStatusInfo = (service: string | null | undefined) => {
         const s = String(service || "").toLowerCase();
         if (s === "active" || s === "true") return { label: "IA Ativa", emoji: "🟢", color: "bg-emerald-500", badgeClass: "bg-emerald-500/15 text-emerald-400" };
-        if (s === "paused") return { label: "Atendimento Humano", emoji: "🟠", color: "bg-amber-500", badgeClass: "bg-amber-500/15 text-amber-400" };
+        if (s === "paused") return { label: "Atendimento Equipe", emoji: "🟠", color: "bg-amber-500", badgeClass: "bg-amber-500/15 text-amber-400" };
         return { label: "Desconhecido", emoji: "⚪", color: "bg-slate-500", badgeClass: "bg-slate-500/15 text-slate-400" };
     };
 
@@ -763,7 +763,7 @@ function ConversationsContent() {
                                     tab === "human" ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"
                                 }`}
                             >
-                                Humano
+                                Equipe
                             </button>
                         </div>
                     </div>
