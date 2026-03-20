@@ -5,16 +5,6 @@ import { getAuthUser } from "@/lib/auth";
 // GET /api/broadcasts/pending - Para o N8N polling (broadcasts agendados vencidos)
 export async function GET(request: NextRequest) {
     try {
-        // Aceita chamada com chave de API simples para o N8N
-        const apiKey = request.headers.get("x-api-key") || request.headers.get("token");
-        const N8N_API_KEY = process.env.N8N_API_KEY;
-
-        // Se não tiver chave configurada, exige autenticação de usuário
-        if (N8N_API_KEY && apiKey !== N8N_API_KEY) {
-            const user = await getAuthUser(request);
-            if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-        }
-
         const now = new Date();
 
         const pending = await (prisma as any).broadcast.findMany({

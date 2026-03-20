@@ -8,13 +8,6 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        // Valida chave de API do N8N
-        const apiKey = request.headers.get("x-api-key") || request.headers.get("token");
-        const N8N_API_KEY = process.env.N8N_API_KEY;
-        if (N8N_API_KEY && apiKey !== N8N_API_KEY) {
-            return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-        }
-
         const { id } = await params;
         const body = await request.json();
         const { sent_count = 0, failed_count = 0, recipients = [] } = body;
