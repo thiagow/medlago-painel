@@ -60,6 +60,8 @@ export const PERMISSIONS = {
         "reactivate_ai",
         "manage_users",
         "manage_broadcasts",
+        "manage_tags",
+        "apply_tags",
     ],
     atendente: [
         "view_chats",
@@ -67,6 +69,7 @@ export const PERMISSIONS = {
         "send_message",
         "transfer_to_human",
         "reactivate_ai",
+        "apply_tags",
     ],
 } as const;
 

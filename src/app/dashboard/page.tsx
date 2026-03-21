@@ -16,6 +16,7 @@ import {
     Building2,
     ArrowUpRight,
     CircleDot,
+    Tag,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -33,6 +34,7 @@ interface StatsResponse {
     };
     by_agent: { id: string; name: string; total: number; finished: number; transferred_external: number }[];
     by_department: { id: string; name: string; total: number }[];
+    by_tag?: { id: string; name: string; color: string; total: number }[];
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -244,6 +246,7 @@ export default function DashboardPage() {
 
     const maxAgentTotal = Math.max(...(stats?.by_agent ?? []).map(a => a.total), 1);
     const maxDeptTotal = Math.max(...(stats?.by_department ?? []).map(d => d.total), 1);
+    const maxTagTotal = Math.max(...(stats?.by_tag ?? []).map(t => t.total), 1);
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto h-full">
@@ -392,6 +395,44 @@ export default function DashboardPage() {
                                             <span className="text-sm font-bold text-white">{dept.total}</span>
                                         </div>
                                         <ProgressBar value={dept.total} max={maxDeptTotal} color="bg-violet-500" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Top Tags do Dia */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                        <div className="flex items-center gap-2.5 mb-5">
+                            <div className="p-2 rounded-lg bg-emerald-500/10">
+                                <Tag className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <h2 className="text-sm font-semibold text-white">Top Tags do Dia</h2>
+                        </div>
+
+                        {(stats?.by_tag ?? []).length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-4 text-center">
+                                <Tag className="w-7 h-7 text-slate-700 mb-2" />
+                                <p className="text-xs text-slate-500">Nenhuma tag usada hoje</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {(stats?.by_tag ?? []).slice(0, 5).map((t) => (
+                                    <div key={t.id}>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+                                                <span className="text-xs text-slate-300">{t.name}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-white">{t.total}</span>
+                                        </div>
+                                        {/* Utilizando style customizado para a cor da barra não ser uma classe fixa Tailwind */}
+                                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full transition-all duration-500"
+                                                style={{ width: `${maxTagTotal > 0 ? (t.total / maxTagTotal) * 100 : 0}%`, backgroundColor: t.color }}
+                                            />
+                                        </div>
                                     </div>
                                 ))}
                             </div>

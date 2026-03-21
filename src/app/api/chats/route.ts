@@ -5,10 +5,14 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const search = searchParams.get("search") || "";
-        const tab = searchParams.get("tab") || "ai"; // "ai" | "human"
+        const tab = searchParams.get("tab") || "ai"; // "ai" | "human" | "waiting"
         const page = parseInt(searchParams.get("page") || "1");
         const limit = parseInt(searchParams.get("limit") || "20");
         const skip = (page - 1) * limit;
+
+        // Identidade do usuário logado
+        const currentUserId = request.headers.get("x-user-id");
+        const currentUserRole = request.headers.get("x-user-role") || "atendente";
 
         // Construir cláusulas WHERE dinâmicas
         const conditions: string[] = [];
@@ -35,14 +39,34 @@ export async function GET(request: NextRequest) {
         conditions.push(`(c.finished IS NULL OR c.finished = false)`);
         conditions.push(`(c.ai_service IS NULL OR c.ai_service NOT IN ('transferred', 'finished'))`);
 
+        // Filtro de visibilidade por departamento (apenas atendentes, nas abas human e waiting)
+        if (currentUserRole === "atendente" && currentUserId && (tab === "human" || tab === "waiting")) {
+            values.push(currentUserId);
+            conditions.push(`(
+                c.assigned_to = $${paramIndex}::bigint
+                OR (
+                    c.assigned_to IS NULL
+                    AND c.department_id IN (
+                        SELECT ud.department_id FROM user_departments ud WHERE ud.user_id = $${paramIndex}::bigint
+                    )
+                )
+            )`);
+            paramIndex++;
+        }
+
         const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
-        // Query principal com JOINs para última mensagem, atendente e departamento
         const chatsQuery = `
             SELECT c.*,
                    MAX(m.created_at) AS last_message_at,
                    u.name AS assigned_user_name,
-                   d.name AS department_name
+                   d.name AS department_name,
+                   (
+                       SELECT json_agg(json_build_object('id', t.id::text, 'name', t.name, 'color', t.color))
+                       FROM "chat_tags" ct
+                       JOIN "tags" t ON ct.tag_id = t.id
+                       WHERE ct.chat_id = c.id
+                   ) as tags
             FROM chats c
             LEFT JOIN chat_messages m ON c.phone = m.phone
             LEFT JOIN users u ON c.assigned_to = u.id
@@ -77,6 +101,7 @@ export async function GET(request: NextRequest) {
             created_at: chat.created_at?.toISOString?.() ?? (chat.created_at ? new Date(chat.created_at).toISOString() : null),
             updated_at: chat.updated_at?.toISOString?.() ?? (chat.updated_at ? new Date(chat.updated_at).toISOString() : null),
             last_message_at: chat.last_message_at?.toISOString?.() ?? (chat.last_message_at ? new Date(chat.last_message_at).toISOString() : null),
+            tags: chat.tags || [],
         }));
 
         return NextResponse.json({

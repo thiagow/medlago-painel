@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendTeamNotification, sendPatientTransferMessage, sendEvolutionMessage } from "@/lib/evolution-api";
+import { sendPatientTransferMessage, sendEvolutionMessage } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
@@ -14,6 +14,7 @@ export async function POST(
             summary,
             transfer_type = "human", // "human" | "external"
             department_id,
+            assigned_to,
             external_contact_id,
         } = await request.json();
 
@@ -59,16 +60,11 @@ export async function POST(
                     status: "waiting",
                     finished: false,
                     ...(department_id ? { department_id: BigInt(department_id) } : {}),
+                    ...(assigned_to ? { assigned_to: BigInt(assigned_to), assigned_at: new Date() } : {}),
                     updated_at: new Date(),
                 },
             });
 
-            // Notificar equipe sobre a transferência
-            try {
-                await sendTeamNotification(phone, summary);
-            } catch (err) {
-                console.error("Erro ao notificar equipe:", err);
-            }
 
         } else {
             // ── TRANSFERÊNCIA EXTERNA ─────────────────────────────

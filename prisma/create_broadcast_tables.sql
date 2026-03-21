@@ -38,3 +38,13 @@ CREATE TABLE IF NOT EXISTS broadcast_recipients (
   sent_at       TIMESTAMPTZ,
   error         TEXT
 );
+
+-- Permissões para as Sequences (necessário para o autoincrement de ID)
+GRANT ALL ON SEQUENCE message_templates_id_seq TO public;
+GRANT ALL ON SEQUENCE broadcasts_id_seq TO public;
+GRANT ALL ON SEQUENCE broadcast_recipients_id_seq TO public;
+
+-- Permissões para as Tabelas
+GRANT ALL ON TABLE message_templates TO public;
+GRANT ALL ON TABLE broadcasts TO public;
+GRANT ALL ON TABLE broadcast_recipients TO public;

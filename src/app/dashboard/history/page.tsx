@@ -6,6 +6,12 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Search, Bot, UserCheck, Calendar, CheckCircle, ArrowRightLeft } from "lucide-react";
 
+interface ChatTag {
+    id: string;
+    name: string;
+    color: string;
+}
+
 interface Chat {
     id: string;
     phone: string | null;
@@ -15,6 +21,7 @@ interface Chat {
     created_at: string | null;
     updated_at: string | null;
     finished: boolean | null;
+    tags?: ChatTag[];
 }
 
 export default function HistoryPage() {
@@ -24,6 +31,8 @@ export default function HistoryPage() {
     const [status, setStatus] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
+    const [tagId, setTagId] = useState("");
+    const [availableTags, setAvailableTags] = useState<ChatTag[]>([]);
     const [loading, setLoading] = useState(false);
 
     const fetchHistory = useCallback(async () => {
@@ -34,6 +43,7 @@ export default function HistoryPage() {
             if (status) params.append("status", status);
             if (startDate) params.append("startDate", startDate);
             if (endDate) params.append("endDate", endDate);
+            if (tagId) params.append("tagId", tagId);
 
             const res = await fetch(`/api/chats/history?${params.toString()}`);
             if (res.ok) {
@@ -45,12 +55,22 @@ export default function HistoryPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, status, startDate, endDate]);
+    }, [search, status, startDate, endDate, tagId]);
 
     useEffect(() => {
-        // Busca inicial ou sempre que os filtros mudarem (poderia usar um botão Buscar tbm)
+        // Busca inicial ou sempre que os filtros mudarem
         fetchHistory();
     }, [fetchHistory]);
+
+    useEffect(() => {
+        // Carregar opções de tags para o filtro
+        fetch("/api/tags")
+            .then(res => res.json())
+            .then(data => {
+                if (data.tags) setAvailableTags(data.tags);
+            })
+            .catch(err => console.error("Erro ao carregar tags:", err));
+    }, []);
 
     const formatPhone = (phone: string | null) => {
         if (!phone) return "Desconhecido";
@@ -125,7 +145,7 @@ export default function HistoryPage() {
             </div>
 
             {/* Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
                 <div className="md:col-span-2 relative">
                     <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
@@ -144,6 +164,7 @@ export default function HistoryPage() {
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [color-scheme:dark]"
+                        title="Data inicial"
                     />
                 </div>
                 <div className="relative">
@@ -153,6 +174,7 @@ export default function HistoryPage() {
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [color-scheme:dark]"
+                        title="Data final"
                     />
                 </div>
 
@@ -170,6 +192,24 @@ export default function HistoryPage() {
                         <option value="finished">✅ Finalizado</option>
                     </select>
                     {/* SVG Chevron */}
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <div className="relative">
+                    <select
+                        value={tagId}
+                        onChange={(e) => setTagId(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [&>option]:bg-slate-900"
+                    >
+                        <option value="">Todas as Tags</option>
+                        {availableTags.map(tag => (
+                            <option key={tag.id} value={tag.id}>{tag.name}</option>
+                        ))}
+                    </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                         <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
@@ -198,6 +238,7 @@ export default function HistoryPage() {
                             <tr>
                                 <th className="px-6 py-4 font-medium">Data</th>
                                 <th className="px-6 py-4 font-medium">Contato</th>
+                                <th className="px-6 py-4 font-medium">Tags</th>
                                 <th className="px-6 py-4 font-medium">Status da IA</th>
                             </tr>
                         </thead>
@@ -213,6 +254,23 @@ export default function HistoryPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="font-medium text-white">{formatPhone(chat.phone)}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {chat.tags && chat.tags.length > 0 ? (
+                                            <div className="flex gap-1 flex-wrap">
+                                                {chat.tags.map(t => (
+                                                    <span 
+                                                        key={t.id}
+                                                        className="px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                                                        style={{ backgroundColor: `${t.color}15`, borderColor: `${t.color}30`, color: t.color }}
+                                                    >
+                                                        {t.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-500 text-xs">—</span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {renderStatusBadge(chat)}

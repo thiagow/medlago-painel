@@ -8,9 +8,29 @@ export async function GET(request: NextRequest) {
         const user = await getAuthUser(request);
         if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
+        const { searchParams } = new URL(request.url);
+        const startDate = searchParams.get("startDate");
+        const endDate = searchParams.get("endDate");
+
+        const where: any = {};
+        if (startDate || endDate) {
+            where.created_at = {};
+            if (startDate) {
+                const s = new Date(startDate);
+                s.setHours(0, 0, 0, 0);
+                where.created_at.gte = s;
+            }
+            if (endDate) {
+                const e = new Date(endDate);
+                e.setHours(23, 59, 59, 999);
+                where.created_at.lte = e;
+            }
+        }
+
         const broadcasts = await (prisma as any).broadcast.findMany({
+            where,
             orderBy: { created_at: "desc" },
-            take: 50,
+            take: 100, // Aumentado para 100 já que tem filtro
             include: { template: { select: { id: true, name: true } } },
         });
 

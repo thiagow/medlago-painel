@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
         const startDate = searchParams.get("startDate");
         const endDate = searchParams.get("endDate");
         const status = searchParams.get("status");
+        const tagId = searchParams.get("tag");
         const page = parseInt(searchParams.get("page") || "1");
         const limit = parseInt(searchParams.get("limit") || "50");
         const skip = (page - 1) * limit;
@@ -21,6 +22,14 @@ export async function GET(request: NextRequest) {
 
         if (status) {
             where.status = status;
+        }
+
+        if (tagId) {
+            where.tags = {
+                some: {
+                    tag_id: BigInt(tagId)
+                }
+            };
         }
 
         if (startDate && endDate) {
@@ -40,6 +49,13 @@ export async function GET(request: NextRequest) {
                 orderBy: { updated_at: "desc" },
                 skip,
                 take: limit,
+                include: {
+                    tags: {
+                        include: {
+                            tag: true
+                        }
+                    }
+                }
             }),
             prisma.chat.count({ where }),
         ]);
@@ -55,6 +71,11 @@ export async function GET(request: NextRequest) {
             updated_at: chat.updated_at?.toISOString?.() ?? (chat.updated_at ? new Date(chat.updated_at).toISOString() : null),
             assigned_at: chat.assigned_at?.toISOString?.() ?? (chat.assigned_at ? new Date(chat.assigned_at).toISOString() : null),
             finished_at: chat.finished_at?.toISOString?.() ?? (chat.finished_at ? new Date(chat.finished_at).toISOString() : null),
+            tags: chat.tags?.map((ct: any) => ({
+                id: ct.tag.id.toString(),
+                name: ct.tag.name,
+                color: ct.tag.color,
+            })) || [],
         }));
 
         return NextResponse.json({

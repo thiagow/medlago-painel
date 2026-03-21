@@ -93,13 +93,29 @@ export async function GET() {
             LIMIT 8
         `;
 
+        // ── 6. Top Tags do Dia ────────────────────────────────────────────────
+        const tagsQuery = `
+            SELECT
+                t.id::text AS tag_id,
+                t.name     AS tag_name,
+                t.color    AS tag_color,
+                COUNT(ct.id)::int AS total
+            FROM "chat_tags" ct
+            INNER JOIN "tags" t ON ct.tag_id = t.id
+            WHERE ct.created_at >= $1 AND ct.created_at <= $2
+            GROUP BY t.id, t.name, t.color
+            ORDER BY total DESC
+            LIMIT 5
+        `;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const [activeRows, finishedRows, startedRows, agentRows, deptRows] = await Promise.all([
+        const [activeRows, finishedRows, startedRows, agentRows, deptRows, tagRows] = await Promise.all([
             prisma.$queryRawUnsafe<any[]>(activeStatusQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(finishedTodayQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(startedTodayQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(agentQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(deptQuery, todayStart, todayEnd),
+            prisma.$queryRawUnsafe<any[]>(tagsQuery, todayStart, todayEnd),
         ]);
 
         // Montar by_status
@@ -131,6 +147,12 @@ export async function GET() {
             by_department: deptRows.map(r => ({
                 id: String(r.dept_id),
                 name: r.dept_name,
+                total: Number(r.total),
+            })),
+            by_tag: tagRows.map(r => ({
+                id: String(r.tag_id),
+                name: r.tag_name,
+                color: r.tag_color,
                 total: Number(r.total),
             })),
         });

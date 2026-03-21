@@ -70,6 +70,29 @@ export async function sendPatientTransferMessage(
     }
 }
 
+// Enviar mensagem quando atendimento for finalizado manualmente (amigável)
+export async function sendChatFinishedMessage(
+    phone: string
+): Promise<void> {
+    const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
+    const EVO_API_KEY = process.env.EVO_API_KEY!;
+    const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "medlago_producao";
+
+    console.log(`Enviando mensagem de finalização para o paciente: ${phone}`);
+
+    try {
+        await sendEvolutionMessage({
+            domain: EVO_DOMAIN,
+            apiKey: EVO_API_KEY,
+            instance: EVO_INSTANCE_BOT,
+            number: phone,
+            text: "Seu atendimento foi finalizado. ✨\n\nAgradecemos o contato. Se precisar de mais alguma ajuda, basta nos chamar novamente!",
+        });
+    } catch (err: any) {
+        console.error("Falha ao enviar mensagem amigável de finalização:", err.message);
+    }
+}
+
 // Notificar a equipe sobre nova transferência
 export async function sendTeamNotification(
     patientPhone: string,

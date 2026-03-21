@@ -5,7 +5,7 @@ import {
     Send, FileText, Plus, Pencil, Trash2, Image as ImageIcon,
     X, Check, Clock, AlertCircle, ChevronRight, ChevronLeft,
     Search, Users, Calendar, Loader2, Eye, CheckCircle2,
-    MessageSquare, Zap
+    MessageSquare, Zap, ChevronDown, CalendarDays, Key
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -32,6 +32,16 @@ interface Broadcast {
     sent_count: number;
     failed_count: number;
     created_at: string;
+    recipients?: Recipient[];
+}
+
+interface Recipient {
+    id: string;
+    phone: string;
+    name: string | null;
+    status: string;
+    sent_at: string | null;
+    error: string | null;
 }
 
 interface Patient {
@@ -544,6 +554,117 @@ function BroadcastWizard({ templates, onClose, onCreated }: {
     );
 }
 
+// ─── Broadcast Detail Modal ──────────────────────────────────────────────────
+
+function BroadcastDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
+    const [broadcast, setBroadcast] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDetails = async () => {
+            setLoading(true);
+            try {
+                const res = await fetch(`/api/broadcasts/${id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setBroadcast(data.broadcast);
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDetails();
+    }, [id]);
+
+    return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+                <div className="flex items-center justify-between p-6 border-b border-slate-800">
+                    <div>
+                        <h3 className="text-white font-semibold text-lg">Detalhes do Disparo</h3>
+                        <p className="text-xs text-slate-500">ID: #{id}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                    {loading ? (
+                        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>
+                    ) : !broadcast ? (
+                        <p className="text-center py-10 text-slate-500">Erro ao carregar detalhes</p>
+                    ) : (
+                        <div className="space-y-6">
+                            {/* Resumo */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Status</p>
+                                    <StatusBadge status={broadcast.status} />
+                                </div>
+                                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Enviados</p>
+                                    <p className="text-lg font-bold text-emerald-400">{broadcast.sent_count} / {broadcast.total_recipients}</p>
+                                </div>
+                                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Falhas</p>
+                                    <p className="text-lg font-bold text-red-400">{broadcast.failed_count}</p>
+                                </div>
+                                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-800">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Template</p>
+                                    <p className="text-sm font-semibold text-white truncate">{broadcast.template?.name}</p>
+                                </div>
+                            </div>
+
+                            {/* Tabela de Destinatários */}
+                            <div>
+                                <h4 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+                                    <Users className="w-4 h-4" /> Lista de Destinatários
+                                </h4>
+                                <div className="bg-slate-950/50 rounded-xl border border-slate-800 overflow-hidden">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-slate-800/50 text-slate-500">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-medium">Paciente</th>
+                                                <th className="px-4 py-2 text-left font-medium">Telefone</th>
+                                                <th className="px-4 py-2 text-left font-medium">Status</th>
+                                                <th className="px-4 py-2 text-left font-medium">Erro</th>
+                                                <th className="px-4 py-2 text-left font-medium">Enviado em</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {broadcast.recipients?.map((r: any) => (
+                                                <tr key={r.id} className="hover:bg-slate-800/20">
+                                                    <td className="px-4 py-2 font-medium text-slate-200">{r.name || "—"}</td>
+                                                    <td className="px-4 py-2 text-slate-400">{r.phone}</td>
+                                                    <td className="px-4 py-2">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium 
+                                                            ${r.status === "sent" ? "bg-emerald-500/10 text-emerald-400" : 
+                                                              r.status === "failed" ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400"}`}>
+                                                            {r.status === "sent" ? "Enviado" : r.status === "failed" ? "Falha" : "Pendente"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-2 text-red-400/80 max-w-xs truncate" title={r.error}>
+                                                        {r.error || "—"}
+                                                    </td>
+                                                    <td className="px-4 py-2 text-slate-500">{formatDate(r.sent_at)}</td>
+                                                </tr>
+                                            ))}
+                                            {(!broadcast.recipients || broadcast.recipients.length === 0) && (
+                                                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-600">Nenhum destinatário encontrado</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function BroadcastsPage() {
@@ -556,6 +677,11 @@ export default function BroadcastsPage() {
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
     const [showWizard, setShowWizard] = useState(false);
+    const [viewingBroadcastId, setViewingBroadcastId] = useState<string | null>(null);
+
+    // Filtros de Data
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
 
     const fetchTemplates = useCallback(async () => {
         setLoadingTemplates(true);
@@ -569,13 +695,22 @@ export default function BroadcastsPage() {
     const fetchBroadcasts = useCallback(async () => {
         setLoadingBroadcasts(true);
         try {
-            const res = await fetch("/api/broadcasts");
-            if (res.ok) { const d = await res.json(); setBroadcasts(d.broadcasts || []); }
-        } finally { setLoadingBroadcasts(false); }
-    }, []);
+            const params = new URLSearchParams();
+            if (startDate) params.append("startDate", startDate);
+            if (endDate) params.append("endDate", endDate);
+
+            const res = await fetch(`/api/broadcasts?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+                setBroadcasts(data.broadcasts || []);
+            }
+        } finally {
+            setLoadingBroadcasts(false);
+        }
+    }, [startDate, endDate]);
 
     useEffect(() => { const t = setTimeout(fetchTemplates, 300); return () => clearTimeout(t); }, [fetchTemplates]);
-    useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts]);
+    useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts, startDate, endDate]);
 
     const handleDeleteTemplate = async (t: Template) => {
         if (!confirm(`Deseja excluir o template "${t.name}"?`)) return;
@@ -700,7 +835,40 @@ export default function BroadcastsPage() {
 
             {/* ── ABA DISPAROS ── */}
             {tab === "broadcasts" && (
-                <div>
+                <div className="space-y-4">
+                    {/* Filtros de Data */}
+                    <div className="flex flex-wrap items-end gap-3 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <CalendarDays className="w-3 h-3" /> Data Inicial
+                            </label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <CalendarDays className="w-3 h-3" /> Data Final
+                            </label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+                            />
+                        </div>
+                        <button
+                            onClick={() => { setStartDate(""); setEndDate(""); }}
+                            disabled={!startDate && !endDate}
+                            className="h-10 px-4 rounded-xl border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm disabled:opacity-30 flex items-center gap-2"
+                        >
+                            <X className="w-4 h-4" /> Limpar
+                        </button>
+                    </div>
+
                     {loadingBroadcasts ? (
                         <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-violet-500 animate-spin" /></div>
                     ) : broadcasts.length === 0 ? (
@@ -748,12 +916,20 @@ export default function BroadcastsPage() {
                                                 </td>
                                                 <td className="px-5 py-3.5 text-slate-500 text-xs">{formatDate(b.created_at)}</td>
                                                 <td className="px-5 py-3.5">
-                                                    {b.status === "scheduled" && (
-                                                        <button onClick={() => handleCancelBroadcast(b)}
-                                                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 text-xs transition-all">
-                                                            <X className="w-3 h-3" />Cancelar
+                                                    <div className="flex items-center gap-2 justify-end">
+                                                        <button onClick={() => setViewingBroadcastId(b.id)}
+                                                            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all shadow-sm"
+                                                            title="Ver detalhes e falhas">
+                                                            <Eye className="w-4 h-4" />
                                                         </button>
-                                                    )}
+                                                        {b.status === "scheduled" && (
+                                                            <button onClick={() => handleCancelBroadcast(b)}
+                                                                className="p-2 rounded-lg bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 transition-all shadow-sm"
+                                                                title="Cancelar agendamento">
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -778,6 +954,12 @@ export default function BroadcastsPage() {
                     templates={templates}
                     onClose={() => setShowWizard(false)}
                     onCreated={() => { setShowWizard(false); setTab("broadcasts"); fetchBroadcasts(); }}
+                />
+            )}
+            {viewingBroadcastId && (
+                <BroadcastDetailModal
+                    id={viewingBroadcastId}
+                    onClose={() => setViewingBroadcastId(null)}
                 />
             )}
         </div>

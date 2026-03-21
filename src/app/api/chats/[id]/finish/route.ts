@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendChatFinishedMessage } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
@@ -52,6 +53,9 @@ export async function POST(
             where: { phone },
             data: { active: false },
         });
+
+        // 4. Enviar mensagem de finalização amigável via WhatsApp
+        await sendChatFinishedMessage(phone);
 
         return NextResponse.json({
             success: true,

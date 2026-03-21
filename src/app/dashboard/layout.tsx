@@ -20,6 +20,7 @@ import {
     CalendarDays,
     Send,
     Key,
+    Tag,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -41,7 +42,7 @@ export default function DashboardLayout({
 
     // Open settings menu automatically if on a settings page
     useEffect(() => {
-        if (pathname.startsWith("/dashboard/departments") || pathname.startsWith("/dashboard/external-contacts")) {
+        if (pathname.startsWith("/dashboard/departments") || pathname.startsWith("/dashboard/external-contacts") || pathname.startsWith("/dashboard/tags")) {
             setSettingsOpen(true);
         }
     }, [pathname]);
@@ -115,6 +116,12 @@ export default function DashboardLayout({
             icon: Phone,
             label: "Contatos Externos",
             id: "nav-external-contacts",
+        },
+        {
+            href: "/dashboard/tags",
+            icon: Tag,
+            label: "Tags de Atendimento",
+            id: "nav-tags",
         },
     ];
 

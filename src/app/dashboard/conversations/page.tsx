@@ -25,9 +25,17 @@ import {
     Mic,
     Square,
     ArrowLeft,
-    Menu
+    Menu,
+    Tag,
+    Plus
 } from "lucide-react";
 import toast from "react-hot-toast";
+
+interface ChatTag {
+    id: string;
+    name: string;
+    color: string;
+}
 
 interface Chat {
     id: string;
@@ -43,6 +51,7 @@ interface Chat {
     department_name: string | null;
     finished: boolean | null;
     status?: string | null;
+    tags?: ChatTag[];
 }
 
 interface Message {
@@ -91,6 +100,7 @@ function ConversationsContent() {
     const [assuming, setAssuming] = useState(false);
     const [finishing, setFinishing] = useState(false);
     const [showConfirm, setShowConfirm] = useState<"transfer" | "reactivate" | "finish" | null>(null);
+    const [showTagModal, setShowTagModal] = useState(false);
     const [waitingCount, setWaitingCount] = useState(0);
     const prevWaitingCountRef = useRef<number>(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -120,6 +130,11 @@ function ConversationsContent() {
     const [selectedDepartment, setSelectedDepartment] = useState("");
     const [externalContacts, setExternalContacts] = useState<any[]>([]);
     const [selectedExternalContact, setSelectedExternalContact] = useState("");
+    const [availableTags, setAvailableTags] = useState<ChatTag[]>([]);
+    const [applyingTag, setApplyingTag] = useState(false);
+    const [departmentAgents, setDepartmentAgents] = useState<{ id: string; name: string }[]>([]);
+    const [selectedAgent, setSelectedAgent] = useState("");
+    const [loadingAgents, setLoadingAgents] = useState(false);
     
     // States Mídia
     const [attachment, setAttachment] = useState<File | null>(null);
@@ -326,7 +341,7 @@ function ConversationsContent() {
         }
     }, [selectedChat?.id]); // Rola suave quando troca de chat e carrega pela primeira vez
 
-    // Fetch Departaments e Contatos Externos para o Modal
+    // Fetch Departamentos e Contatos Externos para o Modal
     useEffect(() => {
         fetch("/api/departments").then(res => res.json()).then(data => {
             if (data.departments) setDepartments(data.departments.filter((d: any) => d.active));
@@ -335,7 +350,27 @@ function ConversationsContent() {
         fetch("/api/external-contacts").then(res => res.json()).then(data => {
             if (data.externalContacts) setExternalContacts(data.externalContacts.filter((e: any) => e.active));
         }).catch(err => console.error(err));
+        
+        fetch("/api/tags").then(res => res.json()).then(data => {
+            if (data.tags) setAvailableTags(data.tags);
+        }).catch(err => console.error(err));
     }, []);
+
+    // Carrega atendentes do departamento selecionado
+    useEffect(() => {
+        if (!selectedDepartment) {
+            setDepartmentAgents([]);
+            setSelectedAgent("");
+            return;
+        }
+        setLoadingAgents(true);
+        setSelectedAgent("");
+        fetch(`/api/departments/${selectedDepartment}/agents`)
+            .then(res => res.json())
+            .then(data => setDepartmentAgents(data.agents || []))
+            .catch(err => console.error("Erro ao buscar atendentes:", err))
+            .finally(() => setLoadingAgents(false));
+    }, [selectedDepartment]);
 
     const handleSelectChat = (chat: Chat) => {
         if (selectedChat?.id === chat.id) return;
@@ -368,6 +403,7 @@ function ConversationsContent() {
                     summary: transferSummary.trim(),
                     transfer_type: transferType,
                     department_id: transferType === "human" ? selectedDepartment : undefined,
+                    assigned_to: transferType === "human" && selectedAgent ? selectedAgent : undefined,
                     external_contact_id: transferType === "external" ? selectedExternalContact : undefined
                 })
             });
@@ -427,6 +463,57 @@ function ConversationsContent() {
             toast.error("Erro ao assumir atendimento");
         } finally {
             setAssuming(false);
+        }
+    };
+
+    const handleApplyTag = async (tagId: string) => {
+        if (!selectedChat) return;
+        setApplyingTag(true);
+        try {
+            const res = await fetch(`/api/chats/${selectedChat.id}/tags`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tag_id: tagId }),
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Erro ao aplicar tag");
+            }
+            const data = await res.json();
+            
+            // Atualizar o chat selecionado
+            const updatedTags = [...(selectedChat.tags || []), data.tag];
+            const updatedChat = { ...selectedChat, tags: updatedTags };
+            setSelectedChat(updatedChat);
+            // Atualizar na lista
+            setChats(prev => prev.map(c => c.id === selectedChat.id ? updatedChat : c));
+            
+            toast.success("Tag aplicada!");
+        } catch (err: any) {
+            toast.error(err?.message || "Erro ao aplicar tag");
+        } finally {
+            setApplyingTag(false);
+        }
+    };
+
+    const handleRemoveTag = async (tagId: string) => {
+        if (!selectedChat) return;
+        try {
+            const res = await fetch(`/api/chats/${selectedChat.id}/tags?tag_id=${tagId}`, {
+                method: "DELETE",
+            });
+            if (!res.ok) throw new Error("Erro ao remover tag");
+            
+            // Atualizar o chat selecionado
+            const updatedTags = (selectedChat.tags || []).filter(t => t.id !== tagId);
+            const updatedChat = { ...selectedChat, tags: updatedTags };
+            setSelectedChat(updatedChat);
+            // Atualizar na lista
+            setChats(prev => prev.map(c => c.id === selectedChat.id ? updatedChat : c));
+            
+            toast.success("Tag removida!");
+        } catch (err: any) {
+            toast.error(err?.message || "Erro ao remover tag");
         }
     };
 
@@ -521,10 +608,14 @@ function ConversationsContent() {
         return s === "active" || s === "true";
     };
 
-    const getStatusInfo = (service: string | null | undefined) => {
+    const getStatusInfo = (service: string | null | undefined, deptName?: string | null) => {
         const s = String(service || "").toLowerCase();
         if (s === "active" || s === "true") return { label: "IA Ativa", emoji: "🟢", color: "bg-emerald-500", badgeClass: "bg-emerald-500/15 text-emerald-400" };
         if (s === "paused") return { label: "Atendimento Equipe", emoji: "🟠", color: "bg-amber-500", badgeClass: "bg-amber-500/15 text-amber-400" };
+        if (s === "waiting") {
+            const label = deptName ? `Aguardando: ${deptName}` : "Aguardando: Geral";
+            return { label, emoji: "⏳", color: "bg-orange-500", badgeClass: "bg-orange-500/15 text-orange-400" };
+        }
         return { label: "Desconhecido", emoji: "⚪", color: "bg-slate-500", badgeClass: "bg-slate-500/15 text-slate-400" };
     };
 
@@ -553,6 +644,7 @@ function ConversationsContent() {
         setTransferSummary("");
         setTransferType("human");
         setSelectedDepartment("");
+        setSelectedAgent("");
         setSelectedExternalContact("");
         setShowConfirm("transfer");
     };
@@ -630,19 +722,45 @@ function ConversationsContent() {
                                     </label>
                                 </div>
                                 {transferType === "human" && (
-                                    <div>
-                                        <label className="text-xs font-medium text-slate-400 mb-1 block">Departamento</label>
-                                        <select
-                                            value={selectedDepartment}
-                                            onChange={e => setSelectedDepartment(e.target.value)}
-                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                        >
-                                            <option value="">Selecione um departamento</option>
-                                            {departments.map(d => (
-                                                <option key={d.id} value={d.id}>{d.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <>
+                                        <div>
+                                            <label className="text-xs font-medium text-slate-400 mb-1 block">Departamento</label>
+                                            <select
+                                                value={selectedDepartment}
+                                                onChange={e => setSelectedDepartment(e.target.value)}
+                                                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                            >
+                                                <option value="">Selecione um departamento</option>
+                                                {departments.map(d => (
+                                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        {selectedDepartment && (
+                                            <div>
+                                                <label className="text-xs font-medium text-slate-400 mb-1 block">
+                                                    Atendente <span className="text-slate-600">(opcional)</span>
+                                                </label>
+                                                <select
+                                                    value={selectedAgent}
+                                                    onChange={e => setSelectedAgent(e.target.value)}
+                                                    disabled={loadingAgents}
+                                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-60"
+                                                >
+                                                    <option value="">Nenhum — Geral do departamento</option>
+                                                    {loadingAgents ? (
+                                                        <option disabled>Carregando...</option>
+                                                    ) : departmentAgents.length === 0 ? (
+                                                        <option disabled>Nenhum atendente neste departamento</option>
+                                                    ) : (
+                                                        departmentAgents.map(a => (
+                                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                                 {transferType === "external" && (
                                     <div>
@@ -706,6 +824,47 @@ function ConversationsContent() {
                             >
                                 {showConfirm === "transfer" ? (transferring ? "Enviando..." : "Confirmar") : showConfirm === "finish" ? (finishing ? "Finalizando..." : "Confirmar") : (reactivating ? "Reativando..." : "Confirmar")}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Tag Modal */}
+            {showTagModal && selectedChat && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                                <Tag className="w-5 h-5 text-violet-400" />
+                                Adicionar Tag
+                            </h3>
+                            <button onClick={() => setShowTagModal(false)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
+                            {availableTags.filter(t => !(selectedChat.tags || []).some(applied => applied.id === t.id)).length === 0 ? (
+                                <p className="text-sm text-slate-400 text-center py-4">Nenhuma tag disponível para adicionar.</p>
+                            ) : (
+                                availableTags
+                                    .filter(t => !(selectedChat.tags || []).some(applied => applied.id === t.id))
+                                    .map(tag => (
+                                        <button
+                                            key={tag.id}
+                                            onClick={() => handleApplyTag(tag.id)}
+                                            disabled={applyingTag}
+                                            className="w-full flex items-center gap-3 p-3 bg-slate-900 border border-slate-700 rounded-xl hover:border-slate-500 transition-colors disabled:opacity-50 text-left"
+                                        >
+                                            <span 
+                                                className="w-3 h-3 rounded-full shrink-0" 
+                                                style={{ backgroundColor: tag.color }}
+                                            />
+                                            <span className="text-sm font-medium text-white flex-1">{tag.name}</span>
+                                            <Plus className="w-4 h-4 text-slate-400" />
+                                        </button>
+                                    ))
+                            )}
                         </div>
                     </div>
                 </div>
@@ -795,14 +954,28 @@ function ConversationsContent() {
                                         <span className="text-[10px] text-slate-500">{formatDate(chat.last_message_at || chat.updated_at)}</span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                        <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusInfo(chat.ai_service).color}`} />
-                                        <span className="text-xs text-slate-400">{getStatusInfo(chat.ai_service).label}</span>
+                                        <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusInfo(chat.ai_service, chat.department_name).color}`} />
+                                        <span className="text-xs text-slate-400">{getStatusInfo(chat.ai_service, chat.department_name).label}</span>
                                         {chat.assigned_user_name && (
                                             <span className="ml-auto text-[11px] text-amber-400/80 font-medium truncate max-w-[100px]">
                                                 {chat.assigned_user_name}
                                             </span>
                                         )}
                                     </div>
+                                    {chat.tags && chat.tags.length > 0 && (
+                                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                            {chat.tags.map(t => (
+                                                <span 
+                                                    key={t.id} 
+                                                    className="text-[9px] px-1.5 py-0.5 rounded border font-medium truncate max-w-[120px]"
+                                                    style={{ backgroundColor: `${t.color}20`, borderColor: `${t.color}40`, color: t.color }}
+                                                    title={t.name}
+                                                >
+                                                    {t.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -847,18 +1020,38 @@ function ConversationsContent() {
                                         )}
                                     </p>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service).badgeClass}`}>
-                                            {getStatusInfo(selectedChat.ai_service).emoji} {getStatusInfo(selectedChat.ai_service).label}
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service, selectedChat.department_name).badgeClass}`}>
+                                            {getStatusInfo(selectedChat.ai_service, selectedChat.department_name).emoji} {getStatusInfo(selectedChat.ai_service, selectedChat.department_name).label}
                                         </span>
                                         {selectedChat.assigned_user_name && (
                                             <span className="text-xs text-amber-400/80 font-medium">
                                                 Atendente: {selectedChat.assigned_user_name}
                                             </span>
                                         )}
-                                        {selectedChat.department_name && (
-                                            <span className="text-xs text-violet-400/80">
-                                                [{selectedChat.department_name}]
+                                        {selectedChat.tags && selectedChat.tags.map(t => (
+                                            <span 
+                                                key={t.id} 
+                                                className="flex items-center gap-1 text-[10px] pl-2 pr-1 py-0.5 rounded-full border shadow-sm"
+                                                style={{ backgroundColor: `${t.color}15`, borderColor: `${t.color}30`, color: t.color }}
+                                            >
+                                                {t.name}
+                                                {!isHistoryView && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); handleRemoveTag(t.id); }}
+                                                        className="hover:bg-black/20 rounded-full p-0.5 transition-colors"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                )}
                                             </span>
+                                        ))}
+                                        {!isHistoryView && (
+                                            <button
+                                                onClick={() => setShowTagModal(true)}
+                                                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-slate-500 transition-colors"
+                                            >
+                                                <Plus className="w-3 h-3" /> Tag
+                                            </button>
                                         )}
                                     </div>
                                 </div>

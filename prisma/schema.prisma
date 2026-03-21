@@ -30,6 +30,7 @@ model Chat {
   status          String?
   finished_at     DateTime? @db.Timestamptz(6)
   finished_by     BigInt?   // FK implícita para users.id
+  tags            ChatTag[]
 
   @@map("chats")
 }
@@ -224,4 +225,30 @@ model BroadcastRecipient {
   error        String?
 
   @@map("broadcast_recipients")
+}
+
+model Tag {
+  id         BigInt    @id @default(autoincrement())
+  name       String    @unique @db.VarChar(50)
+  color      String    @default("#6366f1") @db.VarChar(7)
+  active     Boolean   @default(true)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  chats      ChatTag[]
+
+  @@map("tags")
+}
+
+model ChatTag {
+  id         BigInt   @id @default(autoincrement())
+  chat_id    BigInt
+  tag_id     BigInt
+  added_by   BigInt?
+  source     String   @default("manual") @db.VarChar(20)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  
+  tag        Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  chat       Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
+  @@unique([chat_id, tag_id])
+  @@map("chat_tags")
 }
