@@ -46,8 +46,11 @@ export async function GET(request: NextRequest) {
                 c.assigned_to = $${paramIndex}::bigint
                 OR (
                     c.assigned_to IS NULL
-                    AND c.department_id IN (
-                        SELECT ud.department_id FROM user_departments ud WHERE ud.user_id = $${paramIndex}::bigint
+                    AND (
+                        c.department_id IS NULL 
+                        OR c.department_id IN (
+                            SELECT ud.department_id FROM user_departments ud WHERE ud.user_id = $${paramIndex}::bigint
+                        )
                     )
                 )
             )`);
