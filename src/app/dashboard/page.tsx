@@ -29,7 +29,7 @@ interface StatsResponse {
         waiting: number;
         human: number;
         finished: number;
-        transferred_external: number;
+        team_handled: number;
         total: number;
     };
     by_agent: { id: string; name: string; total: number; finished: number; transferred_external: number }[];
@@ -114,6 +114,7 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 
 export default function DashboardPage() {
     const [stats, setStats] = useState<StatsResponse | null>(null);
+    const [monthlyStats, setMonthlyStats] = useState<StatsResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -122,10 +123,16 @@ export default function DashboardPage() {
     const fetchStats = useCallback(async (showRefreshing = false) => {
         if (showRefreshing) setRefreshing(true);
         try {
-            const res = await fetch(`/api/dashboard-today?_t=${Date.now()}`, { cache: "no-store" });
-            if (res.ok) {
-                const data = await res.json();
-                setStats(data);
+            const [resToday, resMonth] = await Promise.all([
+                fetch(`/api/dashboard-today?_t=${Date.now()}`, { cache: "no-store" }),
+                fetch(`/api/dashboard-month?_t=${Date.now()}`, { cache: "no-store" })
+            ]);
+            
+            if (resToday.ok) {
+                setStats(await resToday.json());
+            }
+            if (resMonth.ok) {
+                setMonthlyStats(await resMonth.json());
             }
         } catch (err) {
             console.error("Erro ao buscar stats:", err);
@@ -142,14 +149,14 @@ export default function DashboardPage() {
         return () => clearInterval(interval);
     }, [fetchStats]);
 
-    const bs = stats?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, transferred_external: 0, total: 0 };
+    const bs = stats?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, team_handled: 0, total: 0 };
+    const bsMonth = monthlyStats?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, team_handled: 0, total: 0 };
 
-    // Cards de status
-    const statusCards = [
+    const getStatusCards = (data: typeof bs) => [
         {
             label: "Atendimentos IA",
-            sublabel: "Em aberto pela IA",
-            value: bs.ai,
+            sublabel: "Em aberto",
+            value: data.ai,
             icon: Bot,
             gradient: "from-blue-500 to-cyan-400",
             bg: "bg-blue-500/10",
@@ -158,8 +165,8 @@ export default function DashboardPage() {
         },
         {
             label: "Aguardando",
-            sublabel: "Transferidos para equipe",
-            value: bs.waiting,
+            sublabel: "Fila da equipe",
+            value: data.waiting,
             icon: Hourglass,
             gradient: "from-orange-500 to-amber-400",
             bg: "bg-orange-500/10",
@@ -168,8 +175,8 @@ export default function DashboardPage() {
         },
         {
             label: "Atendimento Equipe",
-            sublabel: "Em aberto por agentes",
-            value: bs.human,
+            sublabel: "Agentes operando",
+            value: data.human,
             icon: UserCheck,
             gradient: "from-amber-500 to-yellow-400",
             bg: "bg-amber-500/10",
@@ -178,8 +185,8 @@ export default function DashboardPage() {
         },
         {
             label: "Finalizados",
-            sublabel: "Concluídos hoje",
-            value: bs.finished,
+            sublabel: "Concluídos no período",
+            value: data.finished,
             icon: CheckCircle2,
             gradient: "from-emerald-500 to-green-400",
             bg: "bg-emerald-500/10",
@@ -187,19 +194,19 @@ export default function DashboardPage() {
             text: "text-emerald-400",
         },
         {
-            label: "Transf. Externo",
-            sublabel: "Enviados para contato externo",
-            value: bs.transferred_external,
-            icon: PhoneForwarded,
+            label: "Total Equipe",
+            sublabel: "Passaram pela equipe",
+            value: data.team_handled,
+            icon: Users,
             gradient: "from-violet-500 to-purple-400",
             bg: "bg-violet-500/10",
             border: "border-violet-500/20",
             text: "text-violet-400",
         },
         {
-            label: "Total do Dia",
+            label: "Total Registrado",
             sublabel: "Todos os atendimentos",
-            value: bs.total,
+            value: data.total,
             icon: MessageSquare,
             gradient: "from-slate-400 to-slate-300",
             bg: "bg-slate-500/10",
@@ -208,21 +215,49 @@ export default function DashboardPage() {
         },
     ];
 
-    // Donut data
+    const renderCardGrid = (title: string, data: typeof bs) => (
+        <div className="mb-8">
+            <h2 className="text-xl font-bold text-white mb-4 pl-1 border-l-4 border-slate-700">{title}</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {getStatusCards(data).map((card, i) => {
+                    const Icon = card.icon;
+                    return (
+                        <div
+                            key={i}
+                            className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
+                        >
+                            <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
+                            <div className="flex items-center justify-between mb-3">
+                                <div className={`p-2 rounded-lg ${card.bg}`}>
+                                    <Icon className={`w-4 h-4 ${card.text}`} />
+                                </div>
+                            </div>
+                            <div className="text-3xl font-bold text-white mb-1">
+                                <AnimatedNumber value={card.value} />
+                            </div>
+                            <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
+                            <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    // Donut data (based on today normally or monthly?)
+    // Vamos manter o Donut e Rankings baseados no HOJE como no original
     const donutData = [
-        { label: "IA", value: bs.ai, color: "#3b82f6" },
-        { label: "Aguardando", value: bs.waiting, color: "#f97316" },
-        { label: "Equipe", value: bs.human, color: "#f59e0b" },
-        { label: "Finalizados", value: bs.finished, color: "#10b981" },
-        { label: "Transf. Externo", value: bs.transferred_external, color: "#8b5cf6" },
+        { label: "IA", value: bsMonth.ai, color: "#3b82f6" },
+        { label: "Aguardando", value: bsMonth.waiting, color: "#f97316" },
+        { label: "Equipe", value: bsMonth.human, color: "#f59e0b" },
+        { label: "Finalizados", value: bsMonth.finished, color: "#10b981" },
     ];
 
     const donutLegend = [
-        { label: "IA", color: "bg-blue-500", value: bs.ai },
-        { label: "Aguardando", color: "bg-orange-500", value: bs.waiting },
-        { label: "Equipe", color: "bg-amber-500", value: bs.human },
-        { label: "Finalizados", color: "bg-emerald-500", value: bs.finished },
-        { label: "Transf. Ext.", color: "bg-violet-500", value: bs.transferred_external },
+        { label: "IA", color: "bg-blue-500", value: bsMonth.ai },
+        { label: "Aguardando", color: "bg-orange-500", value: bsMonth.waiting },
+        { label: "Equipe", color: "bg-amber-500", value: bsMonth.human },
+        { label: "Finalizados", color: "bg-emerald-500", value: bsMonth.finished },
     ];
 
     // Skeleton
@@ -244,9 +279,9 @@ export default function DashboardPage() {
         );
     }
 
-    const maxAgentTotal = Math.max(...(stats?.by_agent ?? []).map(a => a.total), 1);
-    const maxDeptTotal = Math.max(...(stats?.by_department ?? []).map(d => d.total), 1);
-    const maxTagTotal = Math.max(...(stats?.by_tag ?? []).map(t => t.total), 1);
+    const maxAgentTotal = Math.max(...(monthlyStats?.by_agent ?? []).map(a => a.total), 1);
+    const maxDeptTotal = Math.max(...(monthlyStats?.by_department ?? []).map(d => d.total), 1);
+    const maxTagTotal = Math.max(...(monthlyStats?.by_tag ?? []).map(t => t.total), 1);
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto h-full">
@@ -274,31 +309,8 @@ export default function DashboardPage() {
             </div>
 
             {/* Status Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                {statusCards.map((card, i) => {
-                    const Icon = card.icon;
-                    return (
-                        <div
-                            key={i}
-                            className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
-                        >
-                            {/* Gradient accent bar */}
-                            <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
-
-                            <div className="flex items-center justify-between mb-3">
-                                <div className={`p-2 rounded-lg ${card.bg}`}>
-                                    <Icon className={`w-4 h-4 ${card.text}`} />
-                                </div>
-                            </div>
-                            <div className="text-3xl font-bold text-white mb-1">
-                                <AnimatedNumber value={card.value} />
-                            </div>
-                            <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
-                            <p className="text-[10px] text-slate-600 mt-0.5">{card.sublabel}</p>
-                        </div>
-                    );
-                })}
-            </div>
+            {renderCardGrid("HOJE", bs)}
+            {renderCardGrid("MÊS ATUAL", bsMonth)}
 
             {/* Bottom Section: Donut + Agents + Departments */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -322,9 +334,9 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-white">{item.value}</span>
-                                    {bs.total > 0 && (
+                                    {bsMonth.total > 0 && (
                                         <span className="text-[10px] text-slate-600">
-                                            {((item.value / bs.total) * 100).toFixed(0)}%
+                                            {((item.value / bsMonth.total) * 100).toFixed(0)}%
                                         </span>
                                     )}
                                 </div>
@@ -342,14 +354,14 @@ export default function DashboardPage() {
                         <h2 className="text-sm font-semibold text-white">Por Atendente</h2>
                     </div>
 
-                    {(stats?.by_agent ?? []).length === 0 ? (
+                    {(monthlyStats?.by_agent ?? []).length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
                             <Users className="w-8 h-8 text-slate-700 mb-2" />
-                            <p className="text-xs text-slate-500">Nenhum atendente ativo hoje</p>
+                            <p className="text-xs text-slate-500">Nenhum atendente ativo no mês</p>
                         </div>
                     ) : (
                         <div className="space-y-3.5">
-                            {(stats?.by_agent ?? []).slice(0, 6).map((agent) => (
+                            {(monthlyStats?.by_agent ?? []).slice(0, 6).map((agent) => (
                                 <div key={agent.id}>
                                     <div className="flex items-center justify-between mb-1">
                                         <div className="flex items-center gap-2 min-w-0">
@@ -381,14 +393,14 @@ export default function DashboardPage() {
                             <h2 className="text-sm font-semibold text-white">Por Departamento</h2>
                         </div>
 
-                        {(stats?.by_department ?? []).length === 0 ? (
+                        {(monthlyStats?.by_department ?? []).length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-4 text-center">
                                 <Building2 className="w-7 h-7 text-slate-700 mb-2" />
-                                <p className="text-xs text-slate-500">Nenhum departamento ativo hoje</p>
+                                <p className="text-xs text-slate-500">Nenhum departamento ativo no mês</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {(stats?.by_department ?? []).slice(0, 5).map((dept) => (
+                                {(monthlyStats?.by_department ?? []).slice(0, 5).map((dept) => (
                                     <div key={dept.id}>
                                         <div className="flex items-center justify-between mb-1">
                                             <span className="text-xs text-slate-300">{dept.name}</span>
@@ -401,23 +413,23 @@ export default function DashboardPage() {
                         )}
                     </div>
 
-                    {/* Top Tags do Dia */}
+                    {/* Top Tags do Mês */}
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                         <div className="flex items-center gap-2.5 mb-5">
                             <div className="p-2 rounded-lg bg-emerald-500/10">
                                 <Tag className="w-4 h-4 text-emerald-400" />
                             </div>
-                            <h2 className="text-sm font-semibold text-white">Top Tags do Dia</h2>
+                            <h2 className="text-sm font-semibold text-white">Top Tags do Mês</h2>
                         </div>
 
-                        {(stats?.by_tag ?? []).length === 0 ? (
+                        {(monthlyStats?.by_tag ?? []).length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-4 text-center">
                                 <Tag className="w-7 h-7 text-slate-700 mb-2" />
-                                <p className="text-xs text-slate-500">Nenhuma tag usada hoje</p>
+                                <p className="text-xs text-slate-500">Nenhuma tag usada no mês</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {(stats?.by_tag ?? []).slice(0, 5).map((t) => (
+                                {(monthlyStats?.by_tag ?? []).slice(0, 5).map((t) => (
                                     <div key={t.id}>
                                         <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center gap-2">

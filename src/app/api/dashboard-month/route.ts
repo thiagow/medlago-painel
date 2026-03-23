@@ -2,20 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 /**
- * GET /api/dashboard-today
+ * GET /api/dashboard-month
  *
  * Retorna métricas do dashboard separando:
- * - Ativos agora (sem filtro de data): ai, waiting, human
- * - Concluídos hoje: finished, transferred_external
- * - Iniciados hoje: total criado no dia
- * - Por atendente (chats ativos ou finalizados hoje)
- * - Por departamento (chats ativos ou finalizados hoje)
+ * - Ativos agora
+ * - Concluídos no mês
+ * - Iniciados no mês
+ * - Por atendente
+ * - Por departamento
  */
 export async function GET() {
     try {
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
         // ── 1. Estado atual dos chats ativos (Com filtro de data de hoje) ─────────────
         const activeStatusQuery = `
@@ -121,13 +121,13 @@ export async function GET() {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const [activeRows, finishedRows, startedRows, agentRows, deptRows, tagRows, teamHandledRows] = await Promise.all([
-            prisma.$queryRawUnsafe<any[]>(activeStatusQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(finishedTodayQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(startedTodayQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(agentQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(deptQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(tagsQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(teamHandledQuery, todayStart, todayEnd),
+            prisma.$queryRawUnsafe<any[]>(activeStatusQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(finishedTodayQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(startedTodayQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(agentQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(deptQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(tagsQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(teamHandledQuery, monthStart, monthEnd),
         ]);
 
         // Montar by_status
@@ -156,8 +156,11 @@ export async function GET() {
             }
         }
 
+        const startedToday = Number(startedRows?.[0]?.total ?? 0);
+
         return NextResponse.json({
             by_status: byStatus,
+            started_today: startedToday,
             by_agent: Array.isArray(agentRows) ? agentRows.map(r => ({
                 id: String(r.user_id),
                 name: r.user_name,
