@@ -142,8 +142,10 @@ function ConversationsContent() {
 
     // States Áudio
     const [isRecording, setIsRecording] = useState(false);
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchChats = useCallback(async (currentPage: number, isPolling = false) => {
@@ -673,6 +675,10 @@ function ConversationsContent() {
 
             mediaRecorder.start();
             setIsRecording(true);
+            setRecordingSeconds(0);
+            timerIntervalRef.current = setInterval(() => {
+                setRecordingSeconds(prev => prev + 1);
+            }, 1000);
         } catch (err) {
             console.error('Erro ao acessar microfone:', err);
             toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
@@ -683,7 +689,17 @@ function ConversationsContent() {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
+            if (timerIntervalRef.current) {
+                clearInterval(timerIntervalRef.current);
+                timerIntervalRef.current = null;
+            }
         }
+    };
+
+    const formatRecordingTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
     };
 
     const isHistoryView = selectedChat ? (selectedChat.finished || ["finished", "transferred_external", "transferred"].includes(String(selectedChat.status || selectedChat.ai_service))) : false;
@@ -1299,14 +1315,21 @@ function ConversationsContent() {
                                     >
                                         <Paperclip className="w-5 h-5" />
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={isRecording ? stopRecording : startRecording}
-                                        title={isRecording ? "Parar gravação" : "Gravar áudio"}
-                                        className={`p-3 rounded-xl transition-all ${isRecording ? "bg-red-600 text-white animate-pulse" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-                                    >
-                                        {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={isRecording ? stopRecording : startRecording}
+                                            title={isRecording ? "Parar gravação" : "Gravar áudio"}
+                                            className={`p-3 rounded-xl transition-all ${isRecording ? "bg-red-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                        >
+                                            {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                                        </button>
+                                        {isRecording && (
+                                            <span className="text-sm font-mono font-semibold text-red-400 animate-pulse min-w-[44px]">
+                                                {formatRecordingTime(recordingSeconds)}
+                                            </span>
+                                        )}
+                                    </div>
 
                                     <input
                                         id="message-input"
