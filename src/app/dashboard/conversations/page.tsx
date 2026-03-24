@@ -533,9 +533,12 @@ function ConversationsContent() {
                 else if (attachment.type.startsWith("video/")) mediaType = "video";
 
                 // Conversão para base64
-                const arrayBuffer = await attachment.arrayBuffer();
-                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-                const base64Url = `data:${attachment.type};base64,${base64}`;
+                const base64Url = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(attachment);
+                });
 
                 const res = await fetch(`/api/chats/${selectedChat.id}/send-media`, {
                     method: "POST",
