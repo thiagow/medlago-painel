@@ -6,6 +6,7 @@ const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/refresh"];
 
 // Rotas que precisam de role admin
 const ADMIN_ROUTES = ["/dashboard/users", "/api/users"];
+const ADMIN_EXCEPTIONS = ["/api/users/list"];
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -39,8 +40,11 @@ export async function middleware(request: NextRequest) {
         );
     }
 
-    // Verificar permissão de admin
-    if (ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {
+    // Verificar permissão de admin (exceto se estiver na lista de exceções)
+    const isAdminRoute = ADMIN_ROUTES.some((route) => pathname.startsWith(route));
+    const isException = ADMIN_EXCEPTIONS.some((route) => pathname === route);
+
+    if (isAdminRoute && !isException) {
         if (payload.role !== "admin") {
             if (!pathname.startsWith("/api/")) {
                 return NextResponse.redirect(
