@@ -29,7 +29,8 @@ import {
     ArrowLeft,
     Menu,
     Tag,
-    Plus
+    Plus,
+    Download
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -1278,38 +1279,75 @@ function ConversationsContent() {
                             ) : (
                                 (messages.map((msg, index) => {
                                     const isInactive = msg.active === false;
+                                    // Determina se a mensagem foi enviada por um atendente humano (tem sender_name)
+                                    const isHumanAgent = !!msg.sender_name;
+
+                                    // Helper: renderiza o card de mídia correto em qualquer bolha
+                                    const renderMedia = (side: "patient" | "agent") => {
+                                        if (!msg.media_url) return null;
+                                        const isPdf = msg.media_type === "document" || msg.media_type === "pdf" ||
+                                            msg.media_url?.toLowerCase().includes(".pdf") ||
+                                            (msg.media_name?.toLowerCase().endsWith(".pdf") ?? false);
+
+                                        if (msg.media_type === "image") {
+                                            return <img src={msg.media_url} alt="Imagem" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity mb-2" onClick={() => window.open(msg.media_url!, '_blank')} />;
+                                        }
+                                        if (msg.media_type === "audio") {
+                                            return <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left mb-1" />;
+                                        }
+                                        if (msg.media_type === "video") {
+                                            return <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48 mb-2" />;
+                                        }
+                                        if (isPdf) {
+                                            return (
+                                                <a
+                                                    href={msg.media_url}
+                                                    target="_blank"
+                                                    download={msg.media_name || "documento.pdf"}
+                                                    rel="noreferrer"
+                                                    className={`flex items-center gap-3 p-3 rounded-xl border transition-colors group mb-2 no-underline ${
+                                                        side === "agent"
+                                                            ? "bg-emerald-800/60 border-emerald-600/40 hover:bg-emerald-800"
+                                                            : "bg-slate-700 border-slate-600 hover:bg-slate-600"
+                                                    }`}
+                                                >
+                                                    <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center shrink-0">
+                                                        <FileText className="w-5 h-5 text-red-400" />
+                                                    </div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-sm font-medium text-slate-100 truncate max-w-[160px]">{msg.media_name || "Documento PDF"}</span>
+                                                        <span className="text-xs text-slate-400">Clique para baixar</span>
+                                                    </div>
+                                                    <Download className="w-4 h-4 text-slate-400 group-hover:text-white transition shrink-0 ml-auto" />
+                                                </a>
+                                            );
+                                        }
+                                        // Outros arquivos genéricos
+                                        return (
+                                            <a href={msg.media_url} target="_blank" rel="noreferrer" className={`flex items-center gap-2 px-3 py-2 rounded-lg no-underline transition-colors shrink-0 mb-1 ${
+                                                side === "agent"
+                                                    ? "bg-emerald-800/60 hover:bg-emerald-800 text-emerald-100"
+                                                    : "bg-slate-700 hover:bg-slate-600 text-blue-400"
+                                            }`}>
+                                                <FileText className="w-4 h-4" />
+                                                <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo"}</span>
+                                            </a>
+                                        );
+                                    };
 
                                     return (
                                         <div key={`${msg.id}-${index}`} className="flex flex-col gap-2">
-                                            {/* Mensagem do usuário/lead (vem da tabela e aparece à esquerda como Slate) */}
+                                            {/* Mensagem do paciente/lead (esquerda, cinza) */}
                                             {msg.user_message && (
                                                 <div className="flex justify-start">
-                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm transition-opacity bg-slate-800 text-slate-100 rounded-bl-sm ${isInactive ? "opacity-40" : ""}`}>
-                                                        {msg.media_url && (
-                                                            <div className="mb-2">
-                                                                {msg.media_type === "image" ? (
-                                                                    <img src={msg.media_url} alt="Mídia Recebida" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.media_url!, '_blank')} />
-                                                                ) : msg.media_type === "audio" ? (
-                                                                    <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left" />
-                                                                ) : (
-                                                                    <a href={msg.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-blue-400 no-underline transition-colors shrink-0">
-                                                                        <FileText className="w-4 h-4" />
-                                                                        <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo Recebido"}</span>
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {msg.user_message && (
-                                                            <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.user_message}</p>
-                                                        )}
+                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm bg-slate-700 text-slate-100 rounded-bl-sm`}>
+                                                        {msg.media_url && renderMedia("patient")}
+                                                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.user_message}</p>
                                                         <div className="flex items-center gap-1.5 mt-1 justify-start">
-                                                            <span className="text-[10px] text-slate-500">
-                                                                {formatDate(msg.created_at)}
-                                                            </span>
+                                                            <span className="text-[10px] text-slate-400">{formatDate(msg.created_at)}</span>
                                                             {isInactive && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] text-red-400/70">
-                                                                    <AlertCircle className="w-2.5 h-2.5" />
-                                                                    Inativo
+                                                                <span className="flex items-center gap-0.5 text-[10px] text-slate-500">
+                                                                    <AlertCircle className="w-2.5 h-2.5" /> Inativo
                                                                 </span>
                                                             )}
                                                         </div>
@@ -1317,67 +1355,40 @@ function ConversationsContent() {
                                                 </div>
                                             )}
 
-                                            {/* Mídia recebida do paciente SEM texto (audio, video, imagem direta do WhatsApp) */}
+                                            {/* Mídia do paciente SEM texto */}
                                             {msg.media_url && !msg.user_message && !msg.bot_message && (
                                                 <div className="flex justify-start">
-                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm transition-opacity bg-slate-800 text-slate-100 rounded-bl-sm ${isInactive ? "opacity-40" : ""}`}>
-                                                        <div className="mb-1">
-                                                            {msg.media_type === "image" ? (
-                                                                <img src={msg.media_url} alt="Mídia Recebida" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.media_url!, '_blank')} />
-                                                            ) : msg.media_type === "audio" ? (
-                                                                <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left" />
-                                                            ) : msg.media_type === "video" ? (
-                                                                <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48" />
-                                                            ) : (
-                                                                <a href={msg.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-blue-400 no-underline transition-colors shrink-0">
-                                                                    <FileText className="w-4 h-4" />
-                                                                    <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo Recebido"}</span>
-                                                                </a>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 mt-1 justify-start">
-                                                            <span className="text-[10px] text-slate-500">{formatDate(msg.created_at)}</span>
+                                                    <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm bg-slate-700 text-slate-100 rounded-bl-sm">
+                                                        {renderMedia("patient")}
+                                                        <div className="flex items-center gap-1.5 justify-start">
+                                                            <span className="text-[10px] text-slate-400">{formatDate(msg.created_at)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             )}
 
-                                            {/* Mensagem da IA / Atendente (direita, azul) — só aparece se tiver bot_message */}
+                                            {/* Mensagem da IA/Atendente (direita) */}
                                             {msg.bot_message && (
                                                 <div className="flex justify-end">
-                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm transition-opacity bg-blue-600 text-white rounded-br-sm ${isInactive ? "opacity-40" : ""}`}>
-                                                        {msg.media_url && (
-                                                            <div className="mb-2">
-                                                                {msg.media_type === "image" ? (
-                                                                    <img src={msg.media_url} alt="Mídia Enviada" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.media_url!, '_blank')} />
-                                                                ) : msg.media_type === "audio" ? (
-                                                                    <audio controls src={msg.media_url} className="h-10 w-48 scale-90 origin-left" />
-                                                                ) : msg.media_type === "video" ? (
-                                                                    <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48" />
-                                                                ) : (
-                                                                    <a href={msg.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-lg text-blue-100 no-underline transition-colors shrink-0">
-                                                                        <FileText className="w-4 h-4" />
-                                                                        <span className="truncate max-w-[150px] font-medium text-sm">{msg.media_name || "Arquivo Enviado"}</span>
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {msg.bot_message && (
-                                                            <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.bot_message}</p>
-                                                        )}
+                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm text-white rounded-br-sm ${
+                                                        isHumanAgent
+                                                            ? "bg-emerald-700"   // Atendente humano — verde
+                                                            : "bg-blue-600"     // IA — azul
+                                                    }`}>
+                                                        {msg.media_url && renderMedia("agent")}
+                                                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.bot_message}</p>
                                                         <div className="flex items-center gap-1.5 mt-1 justify-end">
-                                                            <span className="text-[10px] text-blue-200/70">
+                                                            <span className={`text-[10px] ${isHumanAgent ? "text-emerald-200/70" : "text-blue-200/70"}`}>
                                                                 {formatDate(msg.created_at)}
                                                             </span>
                                                             {msg.sender_name && (
-                                                                <span className="text-[10px] text-blue-200/50 font-medium">
+                                                                <span className={`text-[10px] font-medium ${isHumanAgent ? "text-emerald-200/60" : "text-blue-200/50"}`}>
                                                                     — {msg.sender_name}
                                                                 </span>
                                                             )}
                                                             {isInactive && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] text-red-400/70">
-                                                                    <AlertCircle className="w-2.5 h-2.5" />
-                                                                    Inativo
+                                                                <span className="flex items-center gap-0.5 text-[10px] text-slate-300/60">
+                                                                    <AlertCircle className="w-2.5 h-2.5" /> Inativo
                                                                 </span>
                                                             )}
                                                         </div>
