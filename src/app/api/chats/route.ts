@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
                        WHERE ct.chat_id = c.id
                    ) as tags
             FROM chats c
-            LEFT JOIN chat_messages m ON c.phone = m.phone
+            LEFT JOIN chat_messages m ON c.conversation_id = m.conversation_id
             LEFT JOIN users u ON c.assigned_to = u.id
             LEFT JOIN departments d ON c.department_id = d.id
             ${whereClause}

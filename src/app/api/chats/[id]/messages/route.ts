@@ -20,15 +20,25 @@ export async function GET(
             return NextResponse.json({ messages: [] });
         }
 
-        const messages = await prisma.chatMessage.findMany({
-            where: { conversation_id: chat.conversation_id },
-            orderBy: { created_at: "asc" },
-        });
+        // Raw query com LEFT JOIN para trazer o nome do atendente que enviou cada mensagem
+        const messages: any[] = await prisma.$queryRaw`
+            SELECT 
+                m.id, m.created_at, m.phone, m.conversation_id,
+                m.bot_message, m.user_message, m.media_url, m.media_type, m.media_name,
+                m.active, m.sent_by,
+                u.name AS sender_name
+            FROM chat_messages m
+            LEFT JOIN users u ON u.id = m.sent_by
+            WHERE m.conversation_id = ${chat.conversation_id}
+            ORDER BY m.created_at ASC
+        `;
 
         const serialized = messages.map((msg) => ({
             ...msg,
             id: msg.id.toString(),
-            created_at: msg.created_at?.toISOString() || null,
+            sent_by: msg.sent_by?.toString() || null,
+            created_at: msg.created_at ? new Date(msg.created_at).toISOString() : null,
+            sender_name: msg.sender_name || null,
         }));
 
         return NextResponse.json({ messages: serialized });

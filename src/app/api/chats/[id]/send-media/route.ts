@@ -20,6 +20,15 @@ export async function POST(
             return NextResponse.json({ error: "Conversa não encontrada" }, { status: 404 });
         }
 
+        // Extrair ID do Atendente logado para validação e registro
+        const userId = request.headers.get("x-user-id");
+        const userIdBigInt = userId ? BigInt(userId) : null;
+
+        // Validar que somente o atendente responsável pode enviar mídia
+        if (chat.ai_service === "paused" && chat.assigned_to && userIdBigInt && chat.assigned_to !== userIdBigInt) {
+            return NextResponse.json({ error: "Somente o atendente responsável pode interagir com este atendimento." }, { status: 403 });
+        }
+
         // 1. Grava no BD — created_at explícito para garantir ordenação cronológica correta
         const now = new Date();
         const chatMsg = await (prisma.chatMessage as any).create({
@@ -31,14 +40,11 @@ export async function POST(
                 media_type: mediaType,
                 media_name: fileName || null,
                 created_at: now,
+                sent_by: userIdBigInt,
             },
         });
 
-        // 2. Extrai ID do Atendente logado (para pausar IA e marcar quem atendeu)
-        const userId = request.headers.get("x-user-id");
-        const userIdBigInt = userId ? BigInt(userId) : null;
-
-        // Atualiza a conversa: pausa IA e garante atendente vinculado (inclui status 'waiting')
+        // 2. Atualiza a conversa: pausa IA e garante atendente vinculado
         const updateData: any = { updated_at: new Date() };
         if (chat.ai_service !== "paused") {
             // 'waiting' e 'active' passam para 'paused' quando atendente envia mensagem

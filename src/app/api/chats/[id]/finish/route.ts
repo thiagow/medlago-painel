@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendChatFinishedMessage } from "@/lib/evolution-api";
+import { sendNpsSurvey } from "@/lib/evolution-api";
 
 export async function POST(
     request: NextRequest,
@@ -10,7 +10,7 @@ export async function POST(
         const { id } = await params;
         const chatId = BigInt(id);
 
-        const userId = request.headers.get("x-user-id");
+        const userId   = request.headers.get("x-user-id");
         const userName = request.headers.get("x-user-name") || "Atendente";
 
         const chat = await prisma.chat.findUnique({ where: { id: chatId } });
@@ -19,9 +19,17 @@ export async function POST(
         }
 
         const phone = chat.phone;
-        const now = new Date();
+        const now   = new Date();
 
-        // 1. Marcar atendimento como finalizado com rastreamento completo
+        // Verificar se NPS está habilitado (DESATIVADO TEMPORARIAMENTE A PEDIDO DO USUÁRIO)
+        /*
+        const npsEnabled = await prisma.npsConfig.findUnique({ where: { key: 'enabled' } });
+        const useNps = npsEnabled?.value === 'true';
+        */
+        const useNps = false;
+
+        // Finalização imediata (fluxo original, NPS desativado a pedido do usuário)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await prisma.chat.update({
             where: { id: chatId },
             data: {
@@ -37,7 +45,12 @@ export async function POST(
             },
         });
 
-        // 2. Gravar log de finalização (quem finalizou + quando)
+        await prisma.chatMessage.updateMany({
+            where: { phone },
+            data: { active: false },
+        });
+
+        // Log de finalização (sempre)
         await prisma.chatTransferLog.create({
             data: {
                 chat_id: chatId,
@@ -48,18 +61,12 @@ export async function POST(
             },
         });
 
-        // 3. Desativar mensagens ativas do telefone
-        await prisma.chatMessage.updateMany({
-            where: { phone },
-            data: { active: false },
-        });
-
-        // 4. Enviar mensagem de finalização amigável via WhatsApp
-        await sendChatFinishedMessage(phone);
-
         return NextResponse.json({
             success: true,
-            message: "Atendimento finalizado com sucesso",
+            message: useNps
+                ? "Pesquisa NPS enviada ao paciente"
+                : "Atendimento finalizado com sucesso",
+            nps_pending: useNps,
         });
     } catch (error) {
         console.error("Erro ao finalizar atendimento:", error);

@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+
 interface SendMessageParams {
     domain: string;
     apiKey: string;
@@ -183,4 +185,90 @@ export async function sendMediaMessage(options: SendMediaOptions): Promise<void>
     const responseData = await response.json();
     console.log(`[Uazapi] Resposta Media:`, JSON.stringify(responseData));
     return responseData;
+}
+
+// ─── NPS Survey ────────────────────────────────────────────────────────────────
+
+/**
+ * Envia a pesquisa de satisfação NPS ao paciente via Uazapi.
+ * Usa os textos configurados no banco (tabela nps_config).
+ * Cria um registro em nps_responses com status 'pending'.
+ */
+export async function sendNpsSurvey(
+    phone: string,
+    agentName: string,
+    chatId: bigint
+): Promise<void> {
+    const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
+    const EVO_API_KEY = process.env.EVO_API_KEY!;
+    const EVO_INSTANCE = process.env.EVO_INSTANCE_BOT || 'medlago_producao';
+
+    // Buscar configurações do banco
+    const configs = await prisma.npsConfig.findMany();
+    const cfg: Record<string, string> = {};
+    for (const c of configs) cfg[c.key] = c.value;
+
+    if (cfg.enabled !== 'true') {
+        // NPS desativado: envia apenas mensagem de despedida normal
+        await sendEvolutionMessage({
+            domain: EVO_DOMAIN,
+            apiKey: EVO_API_KEY,
+            instance: EVO_INSTANCE,
+            number: phone,
+            text: "Seu atendimento foi finalizado. ✨\n\nAgradecemos o contato!",
+        });
+        return;
+    }
+
+    const greeting = (cfg.greeting || 'Seu atendimento foi finalizado!').replace('{agent_name}', agentName);
+    const question = cfg.question || 'De 0 a 10, como você avalia o atendimento?';
+    const btnBad     = cfg.button_bad     || '😞 0 a 3';
+    const btnNeutral = cfg.button_neutral || '😐 4 a 7';
+    const btnGood    = cfg.button_good    || '😍 8 a 10';
+
+    // 1. Enviar saudação em texto
+    await sendEvolutionMessage({
+        domain: EVO_DOMAIN,
+        apiKey: EVO_API_KEY,
+        instance: EVO_INSTANCE,
+        number: phone,
+        text: greeting,
+    });
+
+    // 2. Enviar botões via /send/menu no formato Uazapi
+    const menuUrl = `${EVO_DOMAIN}/send/menu`;
+    const payload = {
+        number: phone,
+        type: "button",
+        text: question,
+        choices: [
+            `${btnBad}|nps_bad`,
+            `${btnNeutral}|nps_neutral`,
+            `${btnGood}|nps_good`
+        ]
+    };
+
+    const menuRes = await fetch(menuUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: EVO_API_KEY },
+        body: JSON.stringify(payload),
+    });
+
+    if (!menuRes.ok) {
+        const err = await menuRes.text();
+        console.error('[NPS] Erro ao enviar botões:', err);
+        // Não lança erro — continua para registrar mesmo assim
+    }
+
+    // 3. Criar registro pendente em nps_responses
+    await prisma.npsResponse.create({
+        data: {
+            chat_id: chatId,
+            phone,
+            agent_name: agentName,
+            status: 'pending',
+        },
+    });
+
+    console.log(`[NPS] Pesquisa enviada para ${phone}, chat #${chatId}`);
 }
