@@ -21,6 +21,9 @@ import {
     Send,
     Key,
     Tag,
+    Star,
+    BarChart3,
+    TrendingUp,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -32,6 +35,7 @@ export default function DashboardLayout({
     const router = useRouter();
     const pathname = usePathname();
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [analysisOpen, setAnalysisOpen] = useState(false);
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
     useEffect(() => {
@@ -42,8 +46,18 @@ export default function DashboardLayout({
 
     // Open settings menu automatically if on a settings page
     useEffect(() => {
-        if (pathname.startsWith("/dashboard/departments") || pathname.startsWith("/dashboard/external-contacts") || pathname.startsWith("/dashboard/tags")) {
+        if (
+            pathname.startsWith("/dashboard/departments") || 
+            pathname.startsWith("/dashboard/external-contacts") || 
+            pathname.startsWith("/dashboard/tags") || 
+            pathname.startsWith("/dashboard/nps/config") ||
+            pathname.startsWith("/dashboard/users")
+        ) {
             setSettingsOpen(true);
+        }
+        
+        if (pathname.startsWith("/dashboard/analysis")) {
+            setAnalysisOpen(true);
         }
     }, [pathname]);
 
@@ -89,16 +103,20 @@ export default function DashboardLayout({
         ...(isAdmin()
             ? [
                 {
-                    href: "/dashboard/users",
-                    icon: Users,
-                    label: "Usuários",
-                    id: "nav-users",
-                },
-                {
                     href: "/dashboard/broadcasts",
                     icon: Send,
                     label: "Disparos",
                     id: "nav-broadcasts",
+                },
+            ]
+            : []),
+        ...(isAdmin()
+            ? [
+                {
+                    href: "/dashboard/nps",
+                    icon: Star,
+                    label: "Avaliações NPS",
+                    id: "nav-nps",
                 },
             ]
             : []),
@@ -123,6 +141,35 @@ export default function DashboardLayout({
             label: "Tags de Atendimento",
             id: "nav-tags",
         },
+        ...(isAdmin()
+            ? [
+                {
+                    href: "/dashboard/users",
+                    icon: Users,
+                    label: "Usuários",
+                    id: "nav-users",
+                },
+                {
+                    href: "/dashboard/nps/config",
+                    icon: Settings,
+                    label: "Config. NPS",
+                    id: "nav-nps-config",
+                },
+            ]
+            : []),
+    ];
+
+    const analysisItems = [
+        ...(isAdmin()
+            ? [
+                {
+                    href: "/dashboard/analysis/ai-transfers",
+                    icon: TrendingUp,
+                    label: "Atendimento IA",
+                    id: "nav-analysis-ai",
+                },
+            ]
+            : []),
     ];
 
     return (
@@ -156,6 +203,47 @@ export default function DashboardLayout({
                             </Link>
                         );
                     })}
+
+                    {/* Análises (admin only) */}
+                    {isAdmin() && analysisItems.length > 0 && (
+                        <div>
+                            <button
+                                id="nav-analysis"
+                                onClick={() => setAnalysisOpen(!analysisOpen)}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${analysisOpen ? "text-slate-200 bg-slate-800" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                            >
+                                <BarChart3 className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
+                                <span className="hidden md:flex flex-1 items-center justify-between text-sm">
+                                    Análises
+                                    {analysisOpen
+                                        ? <ChevronDown className="w-4 h-4 text-slate-400" />
+                                        : <ChevronRight className="w-4 h-4 text-slate-400" />
+                                    }
+                                </span>
+                            </button>
+
+                            {analysisOpen && (
+                                <div className="hidden md:block mt-1 ml-3 pl-3 border-l border-slate-700 space-y-1">
+                                    {analysisItems.map(({ href, icon: Icon, label, id }) => {
+                                        const isActive = pathname.startsWith(href);
+                                        return (
+                                            <Link
+                                                key={href}
+                                                id={id}
+                                                href={href}
+                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-sm ${isActive
+                                                    ? "bg-rose-600/20 text-rose-400 font-medium"
+                                                    : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                            >
+                                                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-rose-400" : ""}`} />
+                                                {label}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Configurações (admin only) */}
                     {isAdmin() && (
@@ -229,7 +317,7 @@ export default function DashboardLayout({
             </aside>
 
             {/* Main content */}
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0">
+            <main className="flex-1 overflow-y-auto flex flex-col min-w-0">
                 {children}
             </main>
 

@@ -24,6 +24,11 @@ export async function POST(
             return NextResponse.json({ error: "Conversa não encontrada" }, { status: 404 });
         }
 
+        // Validar que somente o atendente responsável pode enviar mensagem
+        if (chat.ai_service === "paused" && chat.assigned_to && userIdBigInt && chat.assigned_to !== userIdBigInt) {
+            return NextResponse.json({ error: "Somente o atendente responsável pode interagir com este atendimento." }, { status: 403 });
+        }
+
         const phone = chat.phone;
 
         // 1. Enviar mensagem via UAZAPI
@@ -61,14 +66,23 @@ export async function POST(
                 bot_message: message.trim(),
                 active: false,
                 created_at: new Date(),
+                sent_by: userIdBigInt,
             },
         });
 
         return NextResponse.json({
             success: true,
             message: {
-                ...newMsg,
                 id: newMsg.id.toString(),
+                phone: newMsg.phone,
+                conversation_id: newMsg.conversation_id,
+                bot_message: newMsg.bot_message,
+                user_message: newMsg.user_message,
+                media_url: newMsg.media_url ?? null,
+                media_type: newMsg.media_type ?? null,
+                media_name: newMsg.media_name ?? null,
+                active: newMsg.active,
+                sent_by: (newMsg as any).sent_by?.toString() ?? null,
                 created_at: newMsg.created_at?.toISOString() || null,
             },
         });

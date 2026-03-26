@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Search, Bot, UserCheck, Calendar, CheckCircle, ArrowRightLeft, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { formatPhone } from "@/lib/format-phone";
 
 interface ChatTag {
     id: string;
@@ -90,11 +91,6 @@ export default function HistoryPage() {
             .catch(err => console.error("Erro ao carregar usuários:", err));
     }, []);
 
-    const formatPhone = (phone: string | null) => {
-        if (!phone) return "Desconhecido";
-        const cleanPhone = phone.split('@')[0];
-        return cleanPhone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, "+$1 ($2) $3-$4");
-    };
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return "—";
         try {

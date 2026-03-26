@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatPhone } from "@/lib/format-phone";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -65,6 +67,7 @@ interface Message {
     media_url?: string | null;
     media_type?: string | null;
     media_name?: string | null;
+    sender_name?: string | null;
 }
 
 export default function ConversationsPage() {
@@ -78,6 +81,7 @@ export default function ConversationsPage() {
 function ConversationsContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { user } = useAuth();
     const chatIdQuery = searchParams.get("chatId");
 
     const [chats, setChats] = useState<Chat[]>([]);
@@ -105,6 +109,16 @@ function ConversationsContent() {
     const prevWaitingCountRef = useRef<number>(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    // Badge de novas mensagens para aba Equipe
+    const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+    const prevLastMessageAtRef = useRef<Record<string, string | null>>({});
+    // Ref para acessar o selectedChat dentro de callbacks sem dependência circular
+    const selectedChatRef = useRef<Chat | null>(null);
+    // Ref do user para evitar closure stale dentro de useCallback sem adicionar user nas deps
+    const userRef = useRef(user);
+    // Ref para comunicar som pendente entre o setState (assíncrono) e o código externo
+    const soundPendingRef = useRef<boolean>(false);
+
     // Toca um bip curto quando chega novo atendimento em espera
     function playAlertSound() {
         try {
@@ -115,12 +129,41 @@ function ConversationsContent() {
             gain.connect(ctx.destination);
             osc.frequency.value = 880;
             osc.type = "sine";
-            // Aumentado para 1.2 segundos para ser mais perceptível
             gain.gain.setValueAtTime(0.25, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
             osc.start(ctx.currentTime);
             osc.stop(ctx.currentTime + 1.2);
             osc.onended = () => ctx.close();
+        } catch { /* browser sem suporte a AudioContext */ }
+    }
+
+    // Som de notificação estilo WhatsApp (duplo-pop curto) para novas mensagens no chat
+    function playMessageNotificationSound() {
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            // Primeiro pop
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.frequency.value = 1200;
+            osc1.type = "sine";
+            gain1.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+            osc1.start(ctx.currentTime);
+            osc1.stop(ctx.currentTime + 0.12);
+            // Segundo pop (mais agudo)
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.frequency.value = 1500;
+            osc2.type = "sine";
+            gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.15);
+            gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+            osc2.start(ctx.currentTime + 0.15);
+            osc2.stop(ctx.currentTime + 0.3);
+            osc2.onended = () => ctx.close();
         } catch { /* browser sem suporte a AudioContext */ }
     }
     const [transferReason, setTransferReason] = useState("");
@@ -191,6 +234,57 @@ function ConversationsContent() {
             // Descobrir se há mais se a chamada retornou a mesma quantidade do limit (20)
             if (!isPolling) {
                 setHasMore(fetchedChats.length === 20);
+            }
+
+            // Detectar novas mensagens para badge (apenas quando é polling)
+            if (isPolling) {
+                // ── FASE 1 (SÍNCRONA): calcular tudo ANTES de qualquer setState ──
+                // Isso garante que shouldPlaySound não depende do batch assíncrono do React 18
+                let shouldPlaySound = false;
+                const newUnreadIncrements: Record<string, number> = {};
+
+                for (const chat of fetchedChats) {
+                    if (!chat.last_message_at) continue;
+                    const prevAt = prevLastMessageAtRef.current[chat.id];
+                    const isCurrentlyOpen = selectedChatRef.current?.id === chat.id;
+                    const prevTime = prevAt ? new Date(prevAt).getTime() : 0;
+                    const newTime = new Date(chat.last_message_at).getTime();
+
+                    if (prevAt && newTime > prevTime && !isCurrentlyOpen) {
+                        newUnreadIncrements[chat.id] = 1;
+                        // Som: responsável pelo chat OU admin
+                        // userRef.current evita closure stale (user não está nas deps do useCallback)
+                        const currentUser = userRef.current;
+                        if (chat.assigned_to === currentUser?.id || currentUser?.role === "admin") {
+                            shouldPlaySound = true;
+                        }
+                    }
+                    // Atualiza o baseline síncrono ANTES do setState
+                    prevLastMessageAtRef.current[chat.id] = chat.last_message_at;
+                }
+
+                // ── FASE 2: aplicar incrementos ao state ──
+                if (Object.keys(newUnreadIncrements).length > 0) {
+                    setUnreadCounts(prev => {
+                        const updated = { ...prev };
+                        for (const [id, inc] of Object.entries(newUnreadIncrements)) {
+                            updated[id] = (updated[id] ?? 0) + inc;
+                        }
+                        return updated;
+                    });
+                }
+
+                // ── FASE 3: tocar som (variável local, 100% síncrona) ──
+                if (shouldPlaySound) {
+                    playMessageNotificationSound();
+                }
+            } else {
+                // Na carga inicial, apenas registra os timestamps sem gerar badges
+                for (const chat of fetchedChats) {
+                    if (!prevLastMessageAtRef.current[chat.id]) {
+                        prevLastMessageAtRef.current[chat.id] = chat.last_message_at;
+                    }
+                }
             }
 
         } catch (err) {
@@ -270,13 +364,22 @@ function ConversationsContent() {
         return () => clearInterval(interval);
     }, [selectedChat?.id, fetchMessages]);
 
-    // Polling a cada 30 segundos para lista lateral (preserva abrangência da página atual)
+    // Polling a cada 8 segundos para lista lateral — reduzido para detecção mais rápida de novas mensagens
     useEffect(() => {
         const interval = setInterval(() => {
             fetchChats(page, true);
-        }, 30000);
+        }, 8000);
         return () => clearInterval(interval);
     }, [fetchChats, page]);
+
+    // Sincroniza refs de selectedChat e user para uso seguro dentro de callbacks
+    useEffect(() => {
+        selectedChatRef.current = selectedChat;
+    }, [selectedChat]);
+
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
 
     // Polling a cada 10 segundos para contagem de chats em espera
     const fetchWaitingCount = useCallback(async () => {
@@ -378,6 +481,10 @@ function ConversationsContent() {
         if (selectedChat?.id === chat.id) return;
         setSelectedChat(chat);
         setMessages([]);
+        // Zera o badge de não lido ao abrir a conversa
+        setUnreadCounts(prev => ({ ...prev, [chat.id]: 0 }));
+        // Atualiza o timestamp visto para o atual do chat
+        prevLastMessageAtRef.current[chat.id] = chat.last_message_at;
     };
 
     const handleTransfer = async () => {
@@ -601,11 +708,6 @@ function ConversationsContent() {
         }
     };
 
-    const formatPhone = (phone: string | null) => {
-        if (!phone) return "Desconhecido";
-        const cleanPhone = phone.split('@')[0];
-        return cleanPhone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, "+$1 ($2) $3-$4");
-    };
 
     const isAiActive = (service: string | null | undefined) => {
         if (!service) return false;
@@ -703,6 +805,11 @@ function ConversationsContent() {
     };
 
     const isHistoryView = selectedChat ? (selectedChat.finished || ["finished", "transferred_external", "transferred"].includes(String(selectedChat.status || selectedChat.ai_service))) : false;
+    // Somente o atendente responsável pode interagir (quando ai_service === "paused")
+    const canInteract = selectedChat ? (
+        selectedChat.ai_service !== "paused" || // IA ativa/waiting: botões de ação normais
+        selectedChat.assigned_to === user?.id   // Paused: só quem assumiu
+    ) : false;
 
     return (
         <div className="flex h-full overflow-hidden">
@@ -959,17 +1066,32 @@ function ConversationsContent() {
                         </div>
                     ) : (
                         <div className="divide-y divide-slate-800/50">
-                            {chats.map((chat) => (
+                            {chats.map((chat) => {
+                                const unread = tab === "human" ? (unreadCounts[chat.id] ?? 0) : 0;
+                                const isSelected = selectedChat?.id === chat.id;
+                                return (
                                 <div
                                     key={chat.id}
                                     onClick={() => handleSelectChat(chat)}
-                                    className={`p-4 cursor-pointer transition-all hover:bg-slate-800 ${selectedChat?.id === chat.id
+                                    className={`p-4 cursor-pointer transition-all hover:bg-slate-800 ${isSelected
                                         ? "bg-slate-800 border-l-2 border-blue-500"
+                                        : unread > 0
+                                        ? "border-l-2 border-red-500 bg-red-500/5"
                                         : "border-l-2 border-transparent"
                                         }`}
                                 >
                                     <div className="flex items-start justify-between mb-1">
-                                        <span className="font-medium text-slate-200 text-sm">{formatPhone(chat.phone)}</span>
+                                        <div className="flex items-center gap-2">
+                                            {/* Badge de não lido */}
+                                            {unread > 0 && !isSelected && (
+                                                <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-lg shadow-red-500/50 animate-pulse shrink-0">
+                                                    {unread > 99 ? "99+" : unread}
+                                                </span>
+                                            )}
+                                            <span className={`font-medium text-sm ${unread > 0 && !isSelected ? "text-white" : "text-slate-200"}`}>
+                                                {formatPhone(chat.phone)}
+                                            </span>
+                                        </div>
                                         <span className="text-[10px] text-slate-500">{formatDate(chat.last_message_at || chat.updated_at)}</span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -996,7 +1118,8 @@ function ConversationsContent() {
                                         </div>
                                     )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                     {loadingMore && (
@@ -1098,8 +1221,8 @@ function ConversationsContent() {
                                             <UserCheck className="w-4 h-4" />
                                             <span className="hidden sm:block">{assuming ? "Assumindo..." : "Assumir Atendimento"}</span>
                                         </button>
-                                    ) : selectedChat.ai_service === "paused" ? (
-                                        // Atendimento Humano ativo: Transferir + Finalizar (sem Reativar IA)
+                                    ) : selectedChat.ai_service === "paused" && canInteract ? (
+                                        // Atendimento Humano ativo (responsável): Transferir + Finalizar
                                         <>
                                             <button
                                                 id="btn-transfer-department"
@@ -1120,6 +1243,11 @@ function ConversationsContent() {
                                                 <span className="hidden sm:block">Finalizar</span>
                                             </button>
                                         </>
+                                    ) : selectedChat.ai_service === "paused" && !canInteract ? (
+                                        // Outro atendente visualizando — sem botões de ação
+                                        <span className="text-xs text-slate-500 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
+                                            🔒 Responsável: {selectedChat.assigned_user_name}
+                                        </span>
                                     ) : (
                                         // IA ativa: Transferir para Humano
                                         <button
@@ -1241,6 +1369,11 @@ function ConversationsContent() {
                                                             <span className="text-[10px] text-blue-200/70">
                                                                 {formatDate(msg.created_at)}
                                                             </span>
+                                                            {msg.sender_name && (
+                                                                <span className="text-[10px] text-blue-200/50 font-medium">
+                                                                    — {msg.sender_name}
+                                                                </span>
+                                                            )}
                                                             {isInactive && (
                                                                 <span className="flex items-center gap-0.5 text-[10px] text-red-400/70">
                                                                     <AlertCircle className="w-2.5 h-2.5" />
@@ -1267,6 +1400,15 @@ function ConversationsContent() {
                                 </span>
                                 <span className="text-slate-600 text-xs mt-1">
                                     Histórico disponível apenas para visualização.
+                                </span>
+                            </div>
+                        ) : !canInteract && selectedChat.ai_service === "paused" ? (
+                            <div className="p-4 flex flex-col items-center justify-center bg-slate-900/80 border-t border-slate-800 shrink-0 select-none h-24">
+                                <span className="text-amber-400/80 font-medium flex items-center gap-2 text-sm">
+                                    🔒 Somente Visualização
+                                </span>
+                                <span className="text-slate-500 text-xs mt-1">
+                                    Apenas o atendente responsável ({selectedChat.assigned_user_name || "—"}) pode interagir.
                                 </span>
                             </div>
                         ) : (
