@@ -1,0 +1,29 @@
+﻿ M src/app/api/chats/[id]/finish/route.ts
+ M src/app/api/chats/[id]/messages/route.ts
+ M src/app/api/chats/[id]/send-media/route.ts
+ M src/app/api/chats/route.ts
+ M src/lib/evolution-api.ts
+?? src/app/api/analysis/
+?? src/app/api/nps/
+?? src/app/dashboard/analysis/
+?? src/app/dashboard/nps/
+?? tmp/all_chats_9633.json
+?? tmp/chat_inspect.json
+?? tmp/chat_result.json
+?? tmp/chat_result.txt
+?? tmp/git_status.txt
+?? tmp/inspect_chats.js
+src/app/api/analysis/ai-transfers/[id]/messages/route.ts
+src/app/api/analysis/ai-transfers/route.ts
+src/app/api/nps/config/route.ts
+src/app/api/nps/stats/route.ts
+src/app/api/nps/webhook/route.ts
+src/app/dashboard/analysis/ai-transfers/page.tsx
+src/app/dashboard/nps/config/page.tsx
+src/app/dashboard/nps/page.tsx
+tmp/all_chats_9633.json
+tmp/chat_inspect.json
+tmp/chat_result.json
+tmp/chat_result.txt
+tmp/git_status.txt
+tmp/inspect_chats.js

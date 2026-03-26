@@ -191,6 +191,11 @@ function ConversationsContent() {
     const audioChunksRef = useRef<Blob[]>([]);
     const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    const clearAttachment = () => {
+        setAttachment(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
 
     const fetchChats = useCallback(async (currentPage: number, isPolling = false) => {
         if (!isPolling && currentPage > 1) {
@@ -668,8 +673,6 @@ function ConversationsContent() {
                 const data = await res.json();
                 if (data.warning) toast(data.warning, { icon: "⚠️" });
                 setMessages((prev) => [...prev, data.message]);
-                setAttachment(null);
-
             } else {
                 // Mensagem de texto normal
                 const res = await fetch(`/api/chats/${selectedChat.id}/send-message`, {
@@ -684,6 +687,7 @@ function ConversationsContent() {
             }
 
             setMessageInput("");
+            clearAttachment();
 
             // Pausar UI (o backend já pausou a IA localmente sem transferir à equipe)
             setSelectedChat((prev) => prev ? { ...prev, ai_service: "paused" } : null);
@@ -1438,7 +1442,7 @@ function ConversationsContent() {
                                                 <span className="text-xs text-slate-500">{(attachment.size / 1024).toFixed(1)} KB</span>
                                             </div>
                                             <button 
-                                                onClick={() => setAttachment(null)} 
+                                                onClick={clearAttachment} 
                                                 className="absolute -top-2 -right-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-full p-1"
                                             >
                                                 <X className="w-3 h-3" />

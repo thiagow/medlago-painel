@@ -1,0 +1,25 @@
+﻿=== Chats 503 e 506 ===
+[
+  {
+    "id": "503",
+    "phone": "+55 61 9868-9633",
+    "conversation_id": "ada811cf-8914-4677-b6de-5b55f481c905",
+    "ai_service": "paused",
+    "finished": true,
+    "assigned_to": "9",
+    "created_at": "2026-03-25T17:51:56.282Z",
+    "updated_at": "2026-03-25T18:15:37.633Z"
+  },
+  {
+    "id": "506",
+    "phone": "+55 61 9868-9633",
+    "conversation_id": "e8ca9f31-6c89-432e-92e3-75eaf652141e",
+    "ai_service": "active",
+    "finished": false,
+    "assigned_to": null,
+    "created_at": "2026-03-25T18:19:36.140Z",
+    "updated_at": null
+  }
+]
+=== Todos chats do n├║mero ===
+[]
