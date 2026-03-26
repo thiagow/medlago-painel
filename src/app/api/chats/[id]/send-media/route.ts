@@ -88,13 +88,18 @@ export async function POST(
             );
         }
 
-        const serializedMsg = { ...chatMsg, id: chatMsg.id.toString(), created_at: now.toISOString() };
+        const serializedMsg = { 
+            ...chatMsg, 
+            id: chatMsg.id.toString(), 
+            created_at: now.toISOString(),
+            sent_by: chatMsg.sent_by?.toString() || null
+        };
         return NextResponse.json({
             success: true,
             message: serializedMsg,
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Erro na rota send-media:", error);
-        return NextResponse.json({ error: "Erro interno no servidor" }, { status: 500 });
+        return NextResponse.json({ error: "Erro interno no servidor: " + (error.message || "Erro desconhecido") }, { status: 500 });
     }
 }
