@@ -64,7 +64,7 @@ export async function POST(
                 phone,
                 conversation_id: chat.conversation_id,
                 bot_message: message.trim(),
-                active: false,
+                active: true,
                 created_at: new Date(),
                 sent_by: userIdBigInt,
             },
