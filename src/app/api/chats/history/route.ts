@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
         const endDate = searchParams.get("endDate");
         const status = searchParams.get("status");
         const tagId = searchParams.get("tag");
+        const assignedTo = searchParams.get("assignedTo");
+        const sort = searchParams.get("sort") || "desc";
         const page = parseInt(searchParams.get("page") || "1");
         const limit = parseInt(searchParams.get("limit") || "50");
         const skip = (page - 1) * limit;
@@ -22,6 +24,10 @@ export async function GET(request: NextRequest) {
 
         if (status) {
             where.status = status;
+        }
+
+        if (assignedTo) {
+            where.assigned_to = BigInt(assignedTo);
         }
 
         if (tagId) {
@@ -46,7 +52,7 @@ export async function GET(request: NextRequest) {
         const [chats, total] = await Promise.all([
             prisma.chat.findMany({
                 where,
-                orderBy: { updated_at: "desc" },
+                orderBy: { created_at: sort as "asc" | "desc" },
                 skip,
                 take: limit,
                 include: {

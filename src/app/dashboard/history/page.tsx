@@ -4,12 +4,17 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Bot, UserCheck, Calendar, CheckCircle, ArrowRightLeft } from "lucide-react";
+import { Search, Bot, UserCheck, Calendar, CheckCircle, ArrowRightLeft, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 interface ChatTag {
     id: string;
     name: string;
     color: string;
+}
+
+interface User {
+    id: string;
+    name: string;
 }
 
 interface Chat {
@@ -32,7 +37,10 @@ export default function HistoryPage() {
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [tagId, setTagId] = useState("");
+    const [assignedTo, setAssignedTo] = useState("");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [availableTags, setAvailableTags] = useState<ChatTag[]>([]);
+    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(false);
 
     const fetchHistory = useCallback(async () => {
@@ -44,6 +52,8 @@ export default function HistoryPage() {
             if (startDate) params.append("startDate", startDate);
             if (endDate) params.append("endDate", endDate);
             if (tagId) params.append("tagId", tagId);
+            if (assignedTo) params.append("assignedTo", assignedTo);
+            params.append("sort", sortOrder);
 
             const res = await fetch(`/api/chats/history?${params.toString()}`);
             if (res.ok) {
@@ -55,7 +65,7 @@ export default function HistoryPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, status, startDate, endDate, tagId]);
+    }, [search, status, startDate, endDate, tagId, assignedTo, sortOrder]);
 
     useEffect(() => {
         // Busca inicial ou sempre que os filtros mudarem
@@ -70,6 +80,14 @@ export default function HistoryPage() {
                 if (data.tags) setAvailableTags(data.tags);
             })
             .catch(err => console.error("Erro ao carregar tags:", err));
+
+        // Carregar lista de usuários (atendentes) para o filtro
+        fetch("/api/users/list")
+            .then(res => res.json())
+            .then(data => {
+                if (data.users) setAvailableUsers(data.users);
+            })
+            .catch(err => console.error("Erro ao carregar usuários:", err));
     }, []);
 
     const formatPhone = (phone: string | null) => {
@@ -77,7 +95,6 @@ export default function HistoryPage() {
         const cleanPhone = phone.split('@')[0];
         return cleanPhone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, "+$1 ($2) $3-$4");
     };
-
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return "—";
         try {
@@ -137,6 +154,11 @@ export default function HistoryPage() {
             </span>
         );
     };
+
+    const toggleSort = () => {
+        setSortOrder(prev => prev === "desc" ? "asc" : "desc");
+    };
+
     return (
         <div className="flex flex-col h-full overflow-hidden bg-slate-950 p-6 md:p-8 max-w-7xl mx-auto w-full">
             <div className="mb-8">
@@ -145,12 +167,12 @@ export default function HistoryPage() {
             </div>
 
             {/* Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-8">
                 <div className="md:col-span-2 relative">
                     <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
                         type="text"
-                        placeholder="Buscar por número ou nome..."
+                        placeholder="Buscar por número..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
@@ -184,14 +206,31 @@ export default function HistoryPage() {
                         onChange={(e) => setStatus(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [&>option]:bg-slate-900"
                     >
-                        <option value="">Todos</option>
+                        <option value="">Status</option>
                         <option value="ai">🤖 IA Ativa</option>
                         <option value="waiting">⏳ Em Espera</option>
                         <option value="human">👥 Equipe</option>
                         <option value="transferred_external">📞 Transf. Externo</option>
                         <option value="finished">✅ Finalizado</option>
                     </select>
-                    {/* SVG Chevron */}
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <div className="relative">
+                    <select
+                        value={assignedTo}
+                        onChange={(e) => setAssignedTo(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [&>option]:bg-slate-900"
+                    >
+                        <option value="">Atendente</option>
+                        {availableUsers.map(user => (
+                            <option key={user.id} value={user.id}>{user.name}</option>
+                        ))}
+                    </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                         <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
                             <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
@@ -205,7 +244,7 @@ export default function HistoryPage() {
                         onChange={(e) => setTagId(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all [&>option]:bg-slate-900"
                     >
-                        <option value="">Todas as Tags</option>
+                        <option value="">Tag</option>
                         {availableTags.map(tag => (
                             <option key={tag.id} value={tag.id}>{tag.name}</option>
                         ))}
@@ -236,7 +275,15 @@ export default function HistoryPage() {
                     <table className="w-full text-left text-sm text-slate-400">
                         <thead className="bg-slate-800/50 text-xs uppercase text-slate-500 sticky top-0">
                             <tr>
-                                <th className="px-6 py-4 font-medium">Data</th>
+                                <th 
+                                    className="px-6 py-4 font-medium cursor-pointer hover:text-white transition-colors"
+                                    onClick={toggleSort}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        Data
+                                        {sortOrder === "desc" ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
+                                    </div>
+                                </th>
                                 <th className="px-6 py-4 font-medium">Contato</th>
                                 <th className="px-6 py-4 font-medium">Tags</th>
                                 <th className="px-6 py-4 font-medium">Status da IA</th>
