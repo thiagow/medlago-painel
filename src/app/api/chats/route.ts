@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
                    MAX(m.created_at) AS last_message_at,
                    u.name AS assigned_user_name,
                    d.name AS department_name,
+                   p.nome AS patient_name,
                    (
                        SELECT json_agg(json_build_object('id', t.id::text, 'name', t.name, 'color', t.color))
                        FROM "chat_tags" ct
@@ -74,8 +75,9 @@ export async function GET(request: NextRequest) {
             LEFT JOIN chat_messages m ON c.conversation_id = m.conversation_id
             LEFT JOIN users u ON c.assigned_to = u.id
             LEFT JOIN departments d ON c.department_id = d.id
+            LEFT JOIN pacientes p ON p.telefone_principal = c.phone
             ${whereClause}
-            GROUP BY c.id, u.name, d.name
+            GROUP BY c.id, u.name, d.name, p.nome
             ORDER BY COALESCE(MAX(m.created_at), c.updated_at) DESC NULLS LAST
             LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
         `;
@@ -104,6 +106,7 @@ export async function GET(request: NextRequest) {
             created_at: chat.created_at?.toISOString?.() ?? (chat.created_at ? new Date(chat.created_at).toISOString() : null),
             updated_at: chat.updated_at?.toISOString?.() ?? (chat.updated_at ? new Date(chat.updated_at).toISOString() : null),
             last_message_at: chat.last_message_at?.toISOString?.() ?? (chat.last_message_at ? new Date(chat.last_message_at).toISOString() : null),
+            patient_name: chat.patient_name ?? null,
             tags: chat.tags || [],
         }));
 

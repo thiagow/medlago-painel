@@ -66,8 +66,9 @@ export async function POST(
         const EVO_API_KEY = process.env.EVO_API_KEY || "";
         const EVO_INSTANCE_BOT = process.env.EVO_INSTANCE_BOT || "";
 
+        let uazapiMessageId: string | null = null;
         try {
-            await sendMediaMessage({
+            uazapiMessageId = await sendMediaMessage({
                 domain: EVO_DOMAIN,
                 apiKey: EVO_API_KEY,
                 instance: EVO_INSTANCE_BOT,
@@ -88,11 +89,21 @@ export async function POST(
             );
         }
 
+        // Salva o uazapi_message_id para permitir apagar a mensagem futuramente
+        if (uazapiMessageId) {
+            await prisma.chatMessage.update({
+                where: { id: chatMsg.id },
+                data: { uazapi_message_id: uazapiMessageId } as any,
+            });
+        }
+
         const serializedMsg = { 
             ...chatMsg, 
             id: chatMsg.id.toString(), 
             created_at: now.toISOString(),
-            sent_by: chatMsg.sent_by?.toString() || null
+            sent_by: chatMsg.sent_by?.toString() || null,
+            uazapi_message_id: uazapiMessageId ?? null,
+            deleted_at: null,
         };
         return NextResponse.json({
             success: true,

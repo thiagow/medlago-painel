@@ -25,7 +25,7 @@ export async function sendEvolutionMessage({
     instance,
     number,
     text,
-}: SendMessageParams): Promise<void> {
+}: SendMessageParams): Promise<string | null> {
     // Remove barras finais do domain para evitar barra dupla na URL (ex: domain/ + /message = domain//message → 404)
     const cleanDomain = domain.replace(/\/+$/, '');
     const url = `${cleanDomain}/send/text`;
@@ -44,6 +44,14 @@ export async function sendEvolutionMessage({
         throw new Error(
             `Evolution API error (${response.status}): ${error}`
         );
+    }
+
+    // Retorna o ID da mensagem para rastreio (usado no delete)
+    try {
+        const data = await response.json();
+        return data?.id ?? null;
+    } catch {
+        return null;
     }
 }
 
@@ -148,7 +156,7 @@ export async function sendReactivationMessage(phone: string): Promise<void> {
 }
 
 // Enviar Mídia (Imagem, Áudio, Arquivo)
-export async function sendMediaMessage(options: SendMediaOptions): Promise<void> {
+export async function sendMediaMessage(options: SendMediaOptions): Promise<string | null> {
     const { domain, apiKey, instance, number, mediaUrl, mediaType, fileName, caption } = options;
     const cleanDomain = domain.replace(/\/+$/, '');
     const url = `${cleanDomain}/send/media`;
@@ -184,7 +192,34 @@ export async function sendMediaMessage(options: SendMediaOptions): Promise<void>
 
     const responseData = await response.json();
     console.log(`[Uazapi] Resposta Media:`, JSON.stringify(responseData));
-    return responseData;
+
+    // Retorna o ID da mensagem para rastreio (usado no delete)
+    return responseData?.id ?? null;
+}
+
+// Apagar mensagem para todos via UAZAPI
+export async function deleteUazapiMessage(uazapiMessageId: string): Promise<void> {
+    const EVO_DOMAIN = (process.env.EVO_DOMAIN || "").replace(/\/+$/, '');
+    const EVO_API_KEY = process.env.EVO_API_KEY!;
+    const url = `${EVO_DOMAIN}/message/delete`;
+
+    console.log(`[Uazapi] Deletando mensagem ID: ${uazapiMessageId}`);
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            token: EVO_API_KEY,
+        },
+        body: JSON.stringify({ id: uazapiMessageId }),
+    });
+
+    if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`[Uazapi] Erro ao deletar mensagem (${response.status}): ${error}`);
+    }
+
+    console.log(`[Uazapi] Mensagem ${uazapiMessageId} apagada com sucesso.`);
 }
 
 // ─── NPS Survey ────────────────────────────────────────────────────────────────

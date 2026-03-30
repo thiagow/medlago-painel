@@ -29,13 +29,14 @@ export async function PUT(
             }
         }
 
-        // Fallback workaround para não quebrar a permissão do banco
-        const payloadCpf = cpf ? cpf : `SEM_CPF_${Date.now()}`;
+        // CPFs vazios devem ser salvos como NULL para não violar o limite de caracteres
+        // e permitir múltiplos cadastros sem CPF (Postgres permite múltiplos NULL em UNIQUE)
+        const payloadCpf = (cpf && cpf.trim() !== "") ? cpf : null;
 
         const updated = await prisma.paciente.update({
             where: { id: BigInt(id) },
             data: {
-                nome,
+                nome: nome.toUpperCase(),
                 telefone_principal,
                 cpf: payloadCpf,
                 email: email || null,

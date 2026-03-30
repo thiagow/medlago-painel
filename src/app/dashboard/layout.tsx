@@ -24,6 +24,8 @@ import {
     Star,
     BarChart3,
     TrendingUp,
+    Eraser,
+    FileSearch,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -36,6 +38,7 @@ export default function DashboardLayout({
     const pathname = usePathname();
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [analysisOpen, setAnalysisOpen] = useState(false);
+    const [logsOpen, setLogsOpen] = useState(false);
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
     useEffect(() => {
@@ -55,9 +58,11 @@ export default function DashboardLayout({
         ) {
             setSettingsOpen(true);
         }
-        
         if (pathname.startsWith("/dashboard/analysis")) {
             setAnalysisOpen(true);
+        }
+        if (pathname.startsWith("/dashboard/logs")) {
+            setLogsOpen(true);
         }
     }, [pathname]);
 
@@ -172,6 +177,19 @@ export default function DashboardLayout({
             : []),
     ];
 
+    const logItems = [
+        ...(isAdmin()
+            ? [
+                {
+                    href: "/dashboard/logs/deleted-messages",
+                    icon: Eraser,
+                    label: "Mensagens Apagadas",
+                    id: "nav-logs-deleted-messages",
+                },
+            ]
+            : []),
+    ];
+
     return (
         <div className="flex h-screen bg-slate-950 overflow-hidden">
             {/* Sidebar */}
@@ -236,6 +254,47 @@ export default function DashboardLayout({
                                                     : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
                                             >
                                                 <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-rose-400" : ""}`} />
+                                                {label}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Logs (admin only) */}
+                    {isAdmin() && logItems.length > 0 && (
+                        <div>
+                            <button
+                                id="nav-logs"
+                                onClick={() => setLogsOpen(!logsOpen)}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${logsOpen ? "text-slate-200 bg-slate-800" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                            >
+                                <FileSearch className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
+                                <span className="hidden md:flex flex-1 items-center justify-between text-sm">
+                                    Logs
+                                    {logsOpen
+                                        ? <ChevronDown className="w-4 h-4 text-slate-400" />
+                                        : <ChevronRight className="w-4 h-4 text-slate-400" />
+                                    }
+                                </span>
+                            </button>
+
+                            {logsOpen && (
+                                <div className="hidden md:block mt-1 ml-3 pl-3 border-l border-slate-700 space-y-1">
+                                    {logItems.map(({ href, icon: Icon, label, id }) => {
+                                        const isActive = pathname.startsWith(href);
+                                        return (
+                                            <Link
+                                                key={href}
+                                                id={id}
+                                                href={href}
+                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-sm ${isActive
+                                                    ? "bg-amber-600/20 text-amber-500 font-medium"
+                                                    : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                            >
+                                                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-amber-500" : ""}`} />
                                                 {label}
                                             </Link>
                                         );

@@ -32,8 +32,9 @@ export async function POST(
         const phone = chat.phone;
 
         // 1. Enviar mensagem via UAZAPI
+        let uazapiMessageId: string | null = null;
         try {
-            await sendEvolutionMessage({
+            uazapiMessageId = await sendEvolutionMessage({
                 domain: process.env.EVO_DOMAIN || "",
                 apiKey: process.env.EVO_API_KEY!,
                 instance: process.env.EVO_INSTANCE_BOT || "",
@@ -59,7 +60,7 @@ export async function POST(
         });
 
         // 3. Registrar mensagem enviada
-        const newMsg = await prisma.chatMessage.create({
+        const newMsg = await (prisma.chatMessage as any).create({
             data: {
                 phone,
                 conversation_id: chat.conversation_id,
@@ -67,6 +68,7 @@ export async function POST(
                 active: true,
                 created_at: new Date(),
                 sent_by: userIdBigInt,
+                uazapi_message_id: uazapiMessageId,
             },
         });
 
@@ -82,12 +84,14 @@ export async function POST(
                 media_type: newMsg.media_type ?? null,
                 media_name: newMsg.media_name ?? null,
                 active: newMsg.active,
-                sent_by: (newMsg as any).sent_by?.toString() ?? null,
+                sent_by: newMsg.sent_by?.toString() ?? null,
+                uazapi_message_id: (newMsg as any).uazapi_message_id ?? null,
+                deleted_at: null,
                 created_at: newMsg.created_at?.toISOString() || null,
             },
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Erro ao enviar mensagem:", error);
-        return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+        return NextResponse.json({ error: "Erro interno no servidor: " + (error.message || "Erro desconhecido") }, { status: 500 });
     }
 }

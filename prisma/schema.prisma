@@ -2,7 +2,9 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  engineType    = "binary"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -36,19 +38,36 @@ model Chat {
 }
 
 model ChatMessage {
-  id              BigInt    @id @default(autoincrement())
-  created_at      DateTime? @db.Timestamptz(6)
-  phone           String?
-  conversation_id String?
-  bot_message     String?
-  user_message    String?
-  media_url       String?
-  media_type      String?
-  media_name      String?
-  active          Boolean?  @default(true)
-  sent_by         BigInt?   // FK implícita para users.id — quem enviou a mensagem
+  id                 BigInt    @id @default(autoincrement())
+  created_at         DateTime? @db.Timestamptz(6)
+  phone              String?
+  conversation_id    String?
+  bot_message        String?
+  user_message       String?
+  media_url          String?
+  media_type         String?
+  media_name         String?
+  active             Boolean?  @default(true)
+  sent_by            BigInt?   // FK implícita para users.id — quem enviou a mensagem
+  uazapi_message_id  String?   // ID da mensagem retornado pela UAZAPI ao enviar
+  deleted_at         DateTime? @db.Timestamptz(6) // Soft delete: data/hora da exclusão
+  deleted_by         BigInt?   // Soft delete: FK implícita para users.id — quem excluiu
 
   @@map("chat_messages")
+}
+
+model ChatMessageDeleteLog {
+  id               BigInt   @id @default(autoincrement())
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  message_id       BigInt   // ID da mensagem excluída
+  chat_id          BigInt   // ID do chat
+  conversation_id  String?  // conversation_id do chat
+  deleted_by       BigInt?  // FK implícita para users.id
+  user_name        String   // Nome do usuário que excluiu
+  original_content String?  @db.Text // Conteúdo original da mensagem
+  media_type       String?  @db.VarChar(50) // Tipo de mídia, se houver
+
+  @@map("chat_message_delete_logs")
 }
 
 // Novas tabelas de autenticação

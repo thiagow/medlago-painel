@@ -30,7 +30,13 @@ import {
     Menu,
     Tag,
     Plus,
-    Download
+    Download,
+    User,
+    UserPlus,
+    History,
+    Save,
+    ChevronDown,
+    Trash2
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -55,6 +61,16 @@ interface Chat {
     finished: boolean | null;
     status?: string | null;
     tags?: ChatTag[];
+    patient_name?: string | null;
+}
+
+interface PatientData {
+    id?: string;
+    nome: string;
+    telefone_principal: string;
+    cpf?: string;
+    email?: string;
+    data_nascimento?: string;
 }
 
 interface Message {
@@ -69,6 +85,8 @@ interface Message {
     media_type?: string | null;
     media_name?: string | null;
     sender_name?: string | null;
+    deleted_at?: string | null;
+    deleted_by_name?: string | null;
 }
 
 export default function ConversationsPage() {
@@ -98,6 +116,20 @@ function ConversationsContent() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+
+    // Gestão de Pacientes
+    const [showPatientModal, setShowPatientModal] = useState(false);
+    const [linkedPatient, setLinkedPatient] = useState<PatientData | null>(null);
+    const [patientForm, setPatientForm] = useState<PatientData>({ nome: "", telefone_principal: "", cpf: "", email: "", data_nascimento: "" });
+    const [savingPatient, setSavingPatient] = useState(false);
+
+    // Histórico Consolidado
+    const [showHistory, setShowHistory] = useState(false);
+    const [historyMessages, setHistoryMessages] = useState<any[]>([]);
+    const [historyTotal, setHistoryTotal] = useState(0);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyChatsCount, setHistoryChatsCount] = useState(0);
 
     const [sendingMessage, setSendingMessage] = useState(false);
     const [transferring, setTransferring] = useState(false);
@@ -308,6 +340,10 @@ function ConversationsContent() {
     const handleTabChange = useCallback((newTab: "ai" | "waiting" | "human") => {
         if (newTab === tab) return;
         setSelectedChat(null);
+        setLinkedPatient(null);
+        setPatientForm({ nome: "", telefone_principal: "", cpf: "", email: "", data_nascimento: "" });
+        setShowHistory(false);
+        setHistoryMessages([]);
         setMessages([]);
         setTab(newTab);
     }, [tab]);
@@ -486,11 +522,111 @@ function ConversationsContent() {
     const handleSelectChat = (chat: Chat) => {
         if (selectedChat?.id === chat.id) return;
         setSelectedChat(chat);
+        setLinkedPatient(null);
+        setPatientForm({ nome: "", telefone_principal: "", cpf: "", email: "", data_nascimento: "" });
+        setShowHistory(false);
+        setHistoryMessages([]);
         setMessages([]);
         // Zera o badge de não lido ao abrir a conversa
         setUnreadCounts(prev => ({ ...prev, [chat.id]: 0 }));
         // Atualiza o timestamp visto para o atual do chat
         prevLastMessageAtRef.current[chat.id] = chat.last_message_at;
+    };
+
+    const formatPhoneMask = (v: string) => {
+        const d = v.replace(/\D/g, "");
+        if (d.length <= 12) {
+            return d.replace(/(\d{2})(\d{2})(\d{4})(\d{4})/, "+$1 ($2) $3-$4");
+        }
+        return d.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4");
+    };
+
+    const handleOpenPatientModal = async () => {
+        if (!selectedChat) return;
+        setSavingPatient(true);
+        setShowPatientModal(true);
+        try {
+            const res = await fetch(`/api/patients/find-by-phone?phone=${selectedChat.phone}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.patient) {
+                    setLinkedPatient(data.patient);
+                    setPatientForm({
+                        id: data.patient.id,
+                        nome: data.patient.nome,
+                        telefone_principal: data.patient.telefone_principal,
+                        cpf: data.patient.cpf || "",
+                        email: data.patient.email || "",
+                        data_nascimento: data.patient.data_nascimento ? data.patient.data_nascimento.split("T")[0] : ""
+                    });
+                } else {
+                    setLinkedPatient(null);
+                    setPatientForm({ nome: "", telefone_principal: selectedChat.phone || "", cpf: "", email: "", data_nascimento: "" });
+                }
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setSavingPatient(false);
+        }
+    };
+
+    const handleSavePatient = async () => {
+        setSavingPatient(true);
+        try {
+            const method = linkedPatient ? "PUT" : "POST";
+            const url = linkedPatient ? `/api/patients/${linkedPatient.id}` : "/api/patients";
+            const res = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(patientForm)
+            });
+            if (res.ok) {
+                toast.success(linkedPatient ? "Contato atualizado" : "Contato cadastrado");
+                setShowPatientModal(false);
+                setChats(prev => prev.map(c => c.phone === selectedChat?.phone ? { ...c, patient_name: patientForm.nome } : c));
+                if (selectedChat) setSelectedChat({ ...selectedChat, patient_name: patientForm.nome });
+            } else {
+                toast.error("Erro ao salvar contato");
+            }
+        } catch (error) {
+            toast.error("Erro ao salvar contato");
+        } finally {
+            setSavingPatient(false);
+        }
+    };
+
+    const fetchConsolidatedHistory = async (pageToFetch = 1) => {
+        if (!selectedChat) return;
+        setHistoryLoading(true);
+        try {
+            const res = await fetch(`/api/chats/consolidated-history?phone=${selectedChat.phone}&page=${pageToFetch}&limit=60`);
+            if (res.ok) {
+                const data = await res.json();
+                if (pageToFetch === 1) {
+                    setHistoryMessages(data.messages);
+                } else {
+                    setHistoryMessages(prev => [...prev, ...data.messages]);
+                }
+                setHistoryTotal(data.total);
+                setHistoryPage(data.page);
+                setHistoryChatsCount(data.chatsCount);
+            }
+        } catch (error) {
+            console.error("Erro histórico", error);
+            toast.error("Erro ao carregar histórico");
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const handleOpenHistory = () => {
+        if (showHistory) {
+            setShowHistory(false);
+            return;
+        }
+        setShowHistory(true);
+        fetchConsolidatedHistory(1);
     };
 
     const handleTransfer = async () => {
@@ -809,6 +945,30 @@ function ConversationsContent() {
         return `${m}:${s}`;
     };
 
+    const handleDeleteMessage = async (msgId: string) => {
+        if (!selectedChat) return;
+        if (!confirm("Tem certeza que deseja apagar esta mensagem para todos?")) return;
+        
+        try {
+            const res = await fetch(`/api/chats/${selectedChat.id}/messages/${msgId}`, {
+                method: "DELETE",
+            });
+            const data = await res.json();
+            
+            if (!res.ok) {
+                throw new Error(data.error || "Erro ao apagar mensagem");
+            }
+            
+            setMessages((prev) =>
+                prev.map((m) => (m.id === msgId ? { ...m, bot_message: "🚫 Mensagem apagada", deleted_at: data.deleted_at || new Date().toISOString() } : m))
+            );
+            toast.success("Mensagem apagada com sucesso");
+        } catch (err: any) {
+            console.error("Erro ao apagar:", err);
+            toast.error(err.message || "Não foi possível apagar a mensagem");
+        }
+    };
+
     const isHistoryView = selectedChat ? (selectedChat.finished || ["finished", "transferred_external", "transferred"].includes(String(selectedChat.status || selectedChat.ai_service))) : false;
     // Somente o atendente responsável pode interagir (quando ai_service === "paused")
     const canInteract = selectedChat ? (
@@ -1086,16 +1246,23 @@ function ConversationsContent() {
                                         }`}
                                 >
                                     <div className="flex items-start justify-between mb-1">
-                                        <div className="flex items-center gap-2">
-                                            {/* Badge de não lido */}
-                                            {unread > 0 && !isSelected && (
-                                                <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-lg shadow-red-500/50 animate-pulse shrink-0">
-                                                    {unread > 99 ? "99+" : unread}
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                {/* Badge de não lido */}
+                                                {unread > 0 && !isSelected && (
+                                                    <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-lg shadow-red-500/50 animate-pulse shrink-0">
+                                                        {unread > 99 ? "99+" : unread}
+                                                    </span>
+                                                )}
+                                                <span className={`font-medium text-sm ${unread > 0 && !isSelected ? "text-white" : "text-slate-200"} truncate max-w-[150px]`}>
+                                                    {chat.patient_name ? chat.patient_name : formatPhone(chat.phone)}
+                                                </span>
+                                            </div>
+                                            {chat.patient_name && (
+                                                <span className="text-[11px] text-slate-500 mt-0.5">
+                                                    {formatPhone(chat.phone)}
                                                 </span>
                                             )}
-                                            <span className={`font-medium text-sm ${unread > 0 && !isSelected ? "text-white" : "text-slate-200"}`}>
-                                                {formatPhone(chat.phone)}
-                                            </span>
                                         </div>
                                         <span className="text-[10px] text-slate-500">{formatDate(chat.last_message_at || chat.updated_at)}</span>
                                     </div>
@@ -1156,16 +1323,29 @@ function ConversationsContent() {
                                         <ArrowLeft className="w-5 h-5" />
                                     </button>
                                 )}
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-                                    <Phone className="w-4 h-4 text-white" />
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center overflow-hidden">
+                                    {selectedChat.patient_name ? (
+                                        <span className="text-white font-bold text-sm uppercase">
+                                            {selectedChat.patient_name.charAt(0)}
+                                        </span>
+                                    ) : (
+                                        <Phone className="w-4 h-4 text-white" />
+                                    )}
                                 </div>
-                                <div>
-                                    <p className="text-sm font-semibold text-white">
-                                        {formatPhone(selectedChat.phone)}
-                                        {isHistoryView && (
-                                            <span className="ml-2 px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded border border-slate-700">Somente Leitura</span>
-                                        )}
-                                    </p>
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-semibold text-white">
+                                            {selectedChat.patient_name ? selectedChat.patient_name : formatPhone(selectedChat.phone)}
+                                            {isHistoryView && (
+                                                <span className="ml-2 px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded border border-slate-700">Somente Leitura</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    {selectedChat.patient_name && (
+                                        <span className="text-[11px] text-slate-400">
+                                            {formatPhone(selectedChat.phone)}
+                                        </span>
+                                    )}
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusInfo(selectedChat.ai_service, selectedChat.department_name).badgeClass}`}>
                                             {getStatusInfo(selectedChat.ai_service, selectedChat.department_name).emoji} {getStatusInfo(selectedChat.ai_service, selectedChat.department_name).label}
@@ -1206,6 +1386,24 @@ function ConversationsContent() {
 
                             {/* Action Buttons */}
                             <div className="flex items-center gap-2">
+                                {!isHistoryView && canInteract && (
+                                    <>
+                                        <button
+                                            onClick={handleOpenPatientModal}
+                                            title={selectedChat.patient_name ? "Editar Contato" : "Adicionar Contato"}
+                                            className="p-2 rounded-xl text-slate-400 hover:text-blue-400 hover:bg-slate-800 transition-all flex items-center gap-1"
+                                        >
+                                            {selectedChat.patient_name ? <User className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                                        </button>
+                                        <button
+                                            onClick={handleOpenHistory}
+                                            title="Histórico Consolidado"
+                                            className={`p-2 rounded-xl transition-all flex items-center gap-1 ${showHistory ? 'text-blue-400 bg-blue-500/10' : 'text-slate-400 hover:text-blue-400 hover:bg-slate-800'}`}
+                                        >
+                                            <History className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
                                 <button
                                     id="btn-refresh-messages"
                                     onClick={() => fetchMessages(selectedChat.id)}
@@ -1293,7 +1491,7 @@ function ConversationsContent() {
                                             msg.media_url?.toLowerCase().includes(".pdf") ||
                                             (msg.media_name?.toLowerCase().endsWith(".pdf") ?? false);
 
-                                        if (msg.media_type === "image") {
+                                        if (msg.media_type === "image" && !isPdf) {
                                             return <img src={msg.media_url} alt="Imagem" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity mb-2" onClick={() => window.open(msg.media_url!, '_blank')} />;
                                         }
                                         if (msg.media_type === "audio") {
@@ -1344,23 +1542,30 @@ function ConversationsContent() {
                                             {/* Mensagem do paciente/lead (esquerda, cinza) */}
                                             {msg.user_message && (
                                                 <div className="flex justify-start">
-                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm bg-slate-700 text-slate-100 rounded-bl-sm`}>
-                                                        {msg.media_url && renderMedia("patient")}
-                                                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.user_message}</p>
+                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm bg-slate-700 text-slate-100 rounded-bl-sm ${msg.deleted_at ? "opacity-50 italic border border-dashed border-slate-600" : ""}`}>
+                                                        {msg.deleted_at ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="flex items-center gap-1.5 text-xs font-medium opacity-90 text-slate-300">
+                                                                    <Trash2 className="w-3.5 h-3.5" /> Mensagem apagada do paciente
+                                                                </span>
+                                                                <span className="text-[10px] opacity-70">
+                                                                    {msg.deleted_by_name ? `Removida por ${msg.deleted_by_name}` : "Removida"} em {formatDate(msg.deleted_at)}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                {msg.media_url && renderMedia("patient")}
+                                                                <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.user_message}</p>
+                                                            </>
+                                                        )}
                                                         <div className="flex items-center gap-1.5 mt-1 justify-start">
                                                             <span className="text-[10px] text-slate-400">{formatDate(msg.created_at)}</span>
-                                                            {isInactive && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] text-slate-500">
-                                                                    <AlertCircle className="w-2.5 h-2.5" /> Inativo
-                                                                </span>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
                                             )}
 
-                                            {/* Mídia do paciente SEM texto */}
-                                            {msg.media_url && !msg.user_message && !msg.bot_message && (
+                                            {msg.media_url && !msg.user_message && !msg.bot_message && !msg.deleted_at && (
                                                 <div className="flex justify-start">
                                                     <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm bg-slate-700 text-slate-100 rounded-bl-sm">
                                                         {renderMedia("patient")}
@@ -1374,27 +1579,46 @@ function ConversationsContent() {
                                             {/* Mensagem da IA/Atendente (direita) */}
                                             {msg.bot_message && (
                                                 <div className="flex justify-end">
-                                                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm text-white rounded-br-sm ${
-                                                        isHumanAgent
-                                                            ? "bg-emerald-700"   // Atendente humano — verde
-                                                            : "bg-blue-600"     // IA — azul
-                                                    }`}>
-                                                        {msg.media_url && renderMedia("agent")}
-                                                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.bot_message}</p>
-                                                        <div className="flex items-center gap-1.5 mt-1 justify-end">
-                                                            <span className={`text-[10px] ${isHumanAgent ? "text-emerald-200/70" : "text-blue-200/70"}`}>
-                                                                {formatDate(msg.created_at)}
-                                                            </span>
-                                                            {msg.sender_name && (
-                                                                <span className={`text-[10px] font-medium ${isHumanAgent ? "text-emerald-200/60" : "text-blue-200/50"}`}>
-                                                                    — {msg.sender_name}
-                                                                </span>
+                                                    <div className="relative group max-w-[75%]">
+                                                        {isHumanAgent && !msg.deleted_at && canInteract && (
+                                                            <button
+                                                                onClick={() => handleDeleteMessage(msg.id)}
+                                                                title="Apagar mensagem"
+                                                                className="absolute -left-10 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <div className={`px-4 py-2.5 rounded-2xl text-sm text-white rounded-br-sm ${
+                                                            isHumanAgent
+                                                                ? "bg-emerald-700"   // Atendente humano — verde
+                                                                : "bg-blue-600"     // IA — azul
+                                                        } ${msg.deleted_at ? "opacity-50 italic border border-dashed border-white/20" : ""}`}>
+                                                            {msg.deleted_at ? (
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="flex items-center gap-1.5 text-xs font-medium opacity-90">
+                                                                        <Trash2 className="w-3.5 h-3.5" /> Mensagem apagada
+                                                                    </span>
+                                                                    <span className="text-[10px] opacity-80">
+                                                                        {msg.deleted_by_name ? `Removida por ${msg.deleted_by_name}` : "Removida"} em {formatDate(msg.deleted_at)}
+                                                                    </span>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    {msg.media_url && renderMedia("agent")}
+                                                                    <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.bot_message}</p>
+                                                                </>
                                                             )}
-                                                            {isInactive && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] text-slate-300/60">
-                                                                    <AlertCircle className="w-2.5 h-2.5" /> Inativo
+                                                            <div className="flex items-center gap-1.5 mt-1 justify-end">
+                                                                <span className={`text-[10px] ${isHumanAgent ? "text-emerald-200/70" : "text-blue-200/70"}`}>
+                                                                    {formatDate(msg.created_at)}
                                                                 </span>
-                                                            )}
+                                                                {msg.sender_name && (
+                                                                    <span className={`text-[10px] font-medium ${isHumanAgent ? "text-emerald-200/60" : "text-blue-200/50"}`}>
+                                                                        — {msg.sender_name}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1511,6 +1735,215 @@ function ConversationsContent() {
                     </>
                 )}
             </div>
+
+            {/* Modal de Paciente / Contato */}
+            {showPatientModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
+                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                <User className="w-5 h-5 text-blue-400" />
+                                {linkedPatient ? "Editar Contato" : "Novo Contato"}
+                            </h3>
+                            <button onClick={() => setShowPatientModal(false)} className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-700 transition-colors">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-slate-400">Nome Completo *</label>
+                                <input
+                                    type="text"
+                                    value={patientForm.nome}
+                                    onChange={(e) => setPatientForm({ ...patientForm, nome: e.target.value })}
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                                    placeholder="Ex: João Silva"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-slate-400">Telefone *</label>
+                                <input
+                                    type="text"
+                                    value={formatPhoneMask(patientForm.telefone_principal)}
+                                    disabled
+                                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-400 cursor-not-allowed"
+                                />
+                                <p className="text-[10px] text-slate-500">O telefone é vinculado automaticamente ao número do chat.</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-slate-400">CPF (opcional)</label>
+                                    <input
+                                        type="text"
+                                        value={patientForm.cpf || ""}
+                                        onChange={(e) => setPatientForm({ ...patientForm, cpf: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                                        placeholder="000.000.000-00"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-slate-400">Nascimento (opcional)</label>
+                                    <input
+                                        type="date"
+                                        value={patientForm.data_nascimento || ""}
+                                        onChange={(e) => setPatientForm({ ...patientForm, data_nascimento: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-slate-400">E-mail (opcional)</label>
+                                <input
+                                    type="email"
+                                    value={patientForm.email || ""}
+                                    onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })}
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                                    placeholder="email@exemplo.com"
+                                />
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-slate-800 bg-slate-800/30 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowPatientModal(false)}
+                                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSavePatient}
+                                disabled={savingPatient || !patientForm.nome.trim()}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-all disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {savingPatient ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Salvar Contato
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Drawer de Histórico Consolidado */}
+            {showHistory && (
+                <div className="absolute right-0 top-0 h-full w-[400px] bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col z-40 transform transition-transform">
+                    <div className="h-16 px-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-800/50">
+                        <div className="flex items-center gap-2">
+                            <History className="w-5 h-5 text-blue-400" />
+                            <h3 className="text-white font-semibold">Histórico Consolidado</h3>
+                        </div>
+                        <button onClick={() => setShowHistory(false)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    
+                    <div className="px-4 py-3 border-b border-slate-800/50 bg-slate-900 shrink-0">
+                        <p className="text-xs text-slate-400 text-center">
+                            Exibindo <span className="font-medium text-white">{historyMessages.length}</span> de <span className="font-medium text-white">{historyTotal}</span> mensagens em <span className="font-medium text-white">{historyChatsCount}</span> atendimentos
+                        </p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {historyLoading && historyPage === 1 ? (
+                            <div className="flex justify-center py-8">
+                                <span className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                            </div>
+                        ) : historyMessages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-40 text-center text-slate-500">
+                                <MessageSquare className="w-8 h-8 mb-2 opacity-50" />
+                                <p className="text-sm">Nenhuma mensagem anterior encontrada.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 pb-4">
+                                {historyMessages.map((msg, index) => {
+                                    // Determina se a mensagem mudou de atendimento (agrupamento por chat_id ou tempo)
+                                    const prevMsg = index > 0 ? historyMessages[index - 1] : null;
+                                    const isNewChat = !prevMsg || prevMsg.chat_id !== msg.chat_id;
+                                    
+                                    return (
+                                        <div key={msg.id || index}>
+                                            {isNewChat && (
+                                                <div className="sticky top-0 z-10 flex justify-center my-6">
+                                                    <span className="px-3 py-1 bg-slate-800/80 backdrop-blur-sm text-slate-300 text-[10px] uppercase font-bold tracking-wider rounded-full border border-slate-700 shadow-sm">
+                                                        Atendimento: {msg.chat_created_at ? formatDate(msg.chat_created_at) : formatDate(msg.created_at)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            
+                                            <div className={`flex w-full mb-3 ${msg.sender_type === "contact" ? "justify-start" : "justify-end"}`}>
+                                                <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${
+                                                    msg.sender_type === "contact" 
+                                                        ? "bg-slate-800 text-slate-200 border border-slate-700/50 rounded-tl-sm" 
+                                                        : "bg-blue-600 text-white rounded-tr-sm shadow-md"
+                                                } ${msg.deleted_at ? "opacity-50 italic border border-dashed border-white/20" : ""}`}>
+                                                    {msg.sender_type !== "contact" && (
+                                                        <p className="text-[10px] font-medium opacity-70 mb-0.5">
+                                                            {msg.sender_type === "bot" ? "Assistente IA" : msg.sender_name || "Equipe"}
+                                                        </p>
+                                                    )}
+                                                    
+                                                    {/* Conteúdo da Mensagem */}
+                                                    {msg.deleted_at ? (
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="flex items-center gap-1 text-[10px] font-medium opacity-90">
+                                                                <Trash2 className="w-3 h-3" /> Mensagem apagada
+                                                            </span>
+                                                            <span className="text-[9px] opacity-70 font-normal not-italic">
+                                                                {msg.deleted_by_name ? `Por ${msg.deleted_by_name}` : "Sistema"} em {formatDate(msg.deleted_at)}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {msg.message_type === "text" && (
+                                                                <p className="text-xs break-words whitespace-pre-wrap leading-relaxed">
+                                                                    {msg.user_message || msg.bot_message}
+                                                                </p>
+                                                            )}
+                                                            {msg.message_type === "image" && (
+                                                                <div className="space-y-1">
+                                                                    <div className="relative group cursor-pointer border border-white/10 rounded-lg overflow-hidden flex items-center justify-center bg-black/20">
+                                                                        <ImageIcon className="w-4 h-4 m-2 opacity-50" />
+                                                                        <span className="text-[10px]">Imagem</span>
+                                                                    </div>
+                                                                    {(msg.user_message || msg.bot_message) && (
+                                                                        <p className="text-xs break-words whitespace-pre-wrap leading-relaxed">
+                                                                            {msg.user_message || msg.bot_message}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {/* Outros tipos omitidos para simplificar o preview */}
+                                                            {["document", "audio", "video"].includes(msg.message_type) && (
+                                                                <div className="flex items-center gap-2 bg-black/10 p-2 rounded-lg border border-white/5">
+                                                                    <FileText className="w-4 h-4 opacity-70" />
+                                                                    <span className="text-xs font-medium">Arquivo de Mídia</span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
+
+                                                    <p className={`text-[9px] mt-1 text-right ${msg.sender_type === "contact" ? "text-slate-500" : "text-blue-200"}`}>
+                                                        {formatDate(msg.created_at)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {historyMessages.length < historyTotal && (
+                                    <button
+                                        onClick={() => fetchConsolidatedHistory(historyPage + 1)}
+                                        disabled={historyLoading}
+                                        className="w-full py-2.5 mt-4 border border-dashed border-slate-700 rounded-xl text-xs text-slate-400 font-medium hover:text-white hover:border-slate-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {historyLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronDown className="w-3 h-3" />}
+                                        Carregar mais antigas
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

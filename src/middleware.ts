@@ -5,7 +5,7 @@ import { verifyAccessToken } from "@/lib/jwt";
 const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/refresh"];
 
 // Rotas que precisam de role admin
-const ADMIN_ROUTES = ["/dashboard/users", "/api/users"];
+const ADMIN_ROUTES = ["/dashboard/users", "/api/users", "/dashboard/logs", "/api/logs"];
 const ADMIN_EXCEPTIONS = ["/api/users/list"];
 
 export async function middleware(request: NextRequest) {
@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
     const isException = ADMIN_EXCEPTIONS.some((route) => pathname === route);
 
     if (isAdminRoute && !isException) {
-        if (payload.role !== "admin") {
+        if (String(payload.role).toLowerCase() !== "admin") {
             if (!pathname.startsWith("/api/")) {
                 return NextResponse.redirect(
                     new URL("/dashboard/conversations", request.url)

@@ -21,14 +21,17 @@ export async function GET(
         }
 
         // Raw query com LEFT JOIN para trazer o nome do atendente que enviou cada mensagem
+        // E também quem apagou a mensagem (se houver log)
         const messages: any[] = await prisma.$queryRaw`
             SELECT 
                 m.id, m.created_at, m.phone, m.conversation_id,
                 m.bot_message, m.user_message, m.media_url, m.media_type, m.media_name,
-                m.active, m.sent_by,
-                u.name AS sender_name
+                m.active, m.sent_by, m.uazapi_message_id, m.deleted_at, m.deleted_by,
+                u.name AS sender_name,
+                l.user_name AS deleted_by_name
             FROM chat_messages m
             LEFT JOIN users u ON u.id = m.sent_by
+            LEFT JOIN chat_message_delete_logs l ON l.message_id = m.id
             WHERE m.conversation_id = ${chat.conversation_id}
             ORDER BY m.created_at ASC
         `;
@@ -37,8 +40,12 @@ export async function GET(
             ...msg,
             id: msg.id.toString(),
             sent_by: msg.sent_by?.toString() || null,
+            deleted_by: msg.deleted_by?.toString() || null,
             created_at: msg.created_at ? new Date(msg.created_at).toISOString() : null,
+            deleted_at: msg.deleted_at ? new Date(msg.deleted_at).toISOString() : null,
             sender_name: msg.sender_name || null,
+            deleted_by_name: msg.deleted_by_name || null,
+            uazapi_message_id: msg.uazapi_message_id || null,
         }));
 
         return NextResponse.json({ messages: serialized });
