@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 
+
 // GET /api/broadcasts - Lista broadcasts (e permite filtro por data)
 export async function GET(request: NextRequest) {
     try {
