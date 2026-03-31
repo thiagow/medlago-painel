@@ -692,8 +692,8 @@ export default function BroadcastsPage() {
         } finally { setLoadingTemplates(false); }
     }, [templateSearch]);
 
-    const fetchBroadcasts = useCallback(async () => {
-        setLoadingBroadcasts(true);
+    const fetchBroadcasts = useCallback(async (silent = false) => {
+        if (!silent) setLoadingBroadcasts(true);
         try {
             const params = new URLSearchParams();
             if (startDate) params.append("startDate", startDate);
@@ -705,9 +705,21 @@ export default function BroadcastsPage() {
                 setBroadcasts(data.broadcasts || []);
             }
         } finally {
-            setLoadingBroadcasts(false);
+            if (!silent) setLoadingBroadcasts(false);
         }
     }, [startDate, endDate]);
+
+    // Polling: enquanto houver broadcasts em 'processing', recarrega a cada 5s
+    const pollingRef = useRef<NodeJS.Timeout | null>(null);
+    useEffect(() => {
+        const hasProcessing = broadcasts.some(b => b.status === "processing");
+        if (hasProcessing) {
+            pollingRef.current = setTimeout(() => fetchBroadcasts(true), 5000);
+        } else {
+            if (pollingRef.current) clearTimeout(pollingRef.current);
+        }
+        return () => { if (pollingRef.current) clearTimeout(pollingRef.current); };
+    }, [broadcasts, fetchBroadcasts]);
 
     useEffect(() => { const t = setTimeout(fetchTemplates, 300); return () => clearTimeout(t); }, [fetchTemplates]);
     useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts, startDate, endDate]);
