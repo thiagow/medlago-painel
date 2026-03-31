@@ -10,7 +10,7 @@ export async function POST(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { sent_count = 0, failed_count = 0, recipients = [] } = body;
+        const { sent_count = 0, failed_count = 0, recipients = [], status = null, error = null } = body;
 
         // Atualiza status dos recipients individuais
         for (const r of recipients) {
@@ -26,12 +26,19 @@ export async function POST(
                 },
             });
         }
+        
+        let finalStatus = "completed";
+        if (status === "failed") {
+            finalStatus = "failed";
+        } else if (sent_count === 0 && failed_count > 0) {
+            finalStatus = "failed";
+        }
 
         // Atualiza contadores do broadcast
         await (prisma as any).broadcast.update({
             where: { id: BigInt(id) },
             data: {
-                status: "completed",
+                status: finalStatus,
                 sent_count,
                 failed_count,
                 finished_at: new Date(),

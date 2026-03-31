@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
             LEFT JOIN chat_messages m ON c.conversation_id = m.conversation_id
             LEFT JOIN users u ON c.assigned_to = u.id
             LEFT JOIN departments d ON c.department_id = d.id
-            LEFT JOIN pacientes p ON p.telefone_principal = c.phone
+            LEFT JOIN pacientes p ON regexp_replace(p.telefone_principal, '[^0-9]', '', 'g') = regexp_replace(c.phone, '[^0-9]', '', 'g')
             ${whereClause}
             GROUP BY c.id, u.name, d.name, p.nome
             ORDER BY COALESCE(MAX(m.created_at), c.updated_at) DESC NULLS LAST

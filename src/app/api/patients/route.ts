@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         const newPatient = await prisma.paciente.create({
             data: {
                 nome: nome.toUpperCase(),
-                telefone_principal,
+                telefone_principal: telefone_principal.split("@")[0].replace(/\D/g, ""),
                 cpf: payloadCpf,
                 email: email || null,
                 data_nascimento: data_nascimento ? new Date(data_nascimento) : null,

@@ -546,22 +546,25 @@ function ConversationsContent() {
         setSavingPatient(true);
         setShowPatientModal(true);
         try {
-            const res = await fetch(`/api/patients/find-by-phone?phone=${selectedChat.phone}`);
+            // Remove o sufixo @s.whatsapp.net etc para a busca
+            const cleanPhone = selectedChat.phone?.split("@")[0] || "";
+            const res = await fetch(`/api/patients/find-by-phone?phone=${cleanPhone}`);
             if (res.ok) {
                 const data = await res.json();
+                console.log("Paciente encontrado via API:", data);
                 if (data.patient) {
                     setLinkedPatient(data.patient);
                     setPatientForm({
                         id: data.patient.id,
-                        nome: data.patient.nome,
-                        telefone_principal: data.patient.telefone_principal,
+                        nome: data.patient.nome || "",
+                        telefone_principal: data.patient.telefone_principal || cleanPhone,
                         cpf: data.patient.cpf || "",
                         email: data.patient.email || "",
                         data_nascimento: data.patient.data_nascimento ? data.patient.data_nascimento.split("T")[0] : ""
                     });
                 } else {
                     setLinkedPatient(null);
-                    setPatientForm({ nome: "", telefone_principal: selectedChat.phone || "", cpf: "", email: "", data_nascimento: "" });
+                    setPatientForm({ nome: "", telefone_principal: cleanPhone, cpf: "", email: "", data_nascimento: "" });
                 }
             }
         } catch (error) {

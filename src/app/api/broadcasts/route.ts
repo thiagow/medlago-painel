@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
             const N8N_BROADCAST_WEBHOOK = process.env.N8N_BROADCAST_WEBHOOK;
             if (N8N_BROADCAST_WEBHOOK) {
                 try {
-                    await fetch(N8N_BROADCAST_WEBHOOK, {
+                    const response = await fetch(N8N_BROADCAST_WEBHOOK, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -128,12 +128,26 @@ export async function POST(request: NextRequest) {
                             })),
                         }),
                     });
+
+                    if (!response.ok) {
+                        throw new Error(`Webhook respondeu com status ${response.status}`);
+                    }
                 } catch (webhookErr) {
                     console.error("[Broadcast] Erro ao chamar webhook N8N:", webhookErr);
-                    // Marca como falha mas não retorna erro — dados salvos no banco
+                    // Marca o disparo e os destinatários como falha
                     await (prisma as any).broadcast.update({
                         where: { id: broadcast.id },
-                        data: { status: "failed" },
+                        data: { 
+                            status: "failed",
+                            failed_count: validPatients.length,
+                            finished_at: new Date(),
+                            recipients: {
+                                updateMany: {
+                                    where: { status: "pending" },
+                                    data: { status: "failed", error: "Erro na comunicação com o N8N" }
+                                }
+                            }
+                        },
                     });
                 }
             }
