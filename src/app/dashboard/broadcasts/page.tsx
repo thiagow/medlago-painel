@@ -67,6 +67,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function getProxiedImageUrl(url: string | null | undefined) {
+    if (!url) return "";
+    if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/")) return url;
+    return `/api/media/proxy?url=${encodeURIComponent(url)}`;
+}
+
 function formatDate(d: string | null) {
     if (!d) return "—";
     try { return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
@@ -95,7 +101,7 @@ function WhatsAppPreview({ body, imageUrl, imageCaption }: { body?: string; imag
                 <div className="max-w-[85%] bg-[#005c4b] rounded-tl-xl rounded-bl-xl rounded-br-xl p-3 shadow-md text-white text-sm space-y-1.5">
                     {imageUrl && (
                         <div className="rounded-lg overflow-hidden bg-slate-800">
-                            <img src={imageUrl} alt="preview" className="w-full object-cover max-h-48" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            <img src={getProxiedImageUrl(imageUrl)} alt="preview" className="w-full object-cover max-h-48" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                             {imageCaption && <p className="p-2 text-xs text-slate-300">{imageCaption}</p>}
                         </div>
                     )}
@@ -116,40 +122,70 @@ function TemplateModal({ template, onClose, onSave }: {
 }) {
     const [name, setName] = useState(template?.name || "");
     const [body, setBody] = useState(template?.body || "");
+    // imageUrl = URL do R2 (existente para templates já salvos)
     const [imageUrl, setImageUrl] = useState(template?.image_url || "");
     const [imageCaption, setImageCaption] = useState(template?.image_caption || "");
-    const [uploading, setUploading] = useState(false);
+    // selectedFile = arquivo selecionado que ainda não foi enviado ao R2
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    // previewUrl = blob URL local gerado a partir do selectedFile (sem rede)
+    const [previewUrl, setPreviewUrl] = useState(template?.image_url || "");
     const [saving, setSaving] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleUpload = async (file: File) => {
-        setUploading(true);
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            const res = await fetch("/api/media/upload", { method: "POST", body: formData });
-            if (!res.ok) throw new Error("Falha no upload");
-            const data = await res.json();
-            setImageUrl(data.url);
-            toast.success("Imagem carregada!");
-        } catch {
-            toast.error("Erro ao fazer upload da imagem");
-        } finally {
-            setUploading(false);
-        }
+    const handleFileSelect = (file: File) => {
+        // Revoga blob anterior para liberar memória do browser
+        if (previewUrl && !imageUrl) URL.revokeObjectURL(previewUrl);
+        setSelectedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+        setImageUrl(""); // nova imagem ancora nova URL do R2
+    };
+
+    const handleRemoveImage = () => {
+        if (previewUrl && !imageUrl) URL.revokeObjectURL(previewUrl);
+        setSelectedFile(null);
+        setPreviewUrl("");
+        setImageUrl("");
+        setImageCaption("");
     };
 
     const handleSave = async () => {
         if (!name.trim()) { toast.error("Nome é obrigatório"); return; }
-        if (!body.trim() && !imageUrl.trim()) { toast.error("Adicione texto e/ou imagem"); return; }
         setSaving(true);
+
+        let finalImageUrl = imageUrl;
+
+        // Se há um arquivo novo aguardando, faz o upload ao R2 agora
+        if (selectedFile) {
+            try {
+                const formData = new FormData();
+                formData.append("file", selectedFile);
+                const res = await fetch("/api/media/upload", { method: "POST", body: formData });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || "Falha ao enviar a imagem");
+                }
+                const data = await res.json();
+                finalImageUrl = data.url;
+            } catch (err: any) {
+                toast.error(err.message || "Erro ao fazer upload da imagem");
+                setSaving(false);
+                return;
+            }
+        }
+
+        if (!body.trim() && !finalImageUrl) {
+            toast.error("Adicione texto e/ou imagem");
+            setSaving(false);
+            return;
+        }
+
         try {
             const url = template ? `/api/message-templates/${template.id}` : "/api/message-templates";
             const res = await fetch(url, {
                 method: template ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, body: body || null, image_url: imageUrl || null, image_caption: imageCaption || null }),
+                body: JSON.stringify({ name, body: body || null, image_url: finalImageUrl || null, image_caption: imageCaption || null }),
             });
             if (!res.ok) {
                 const err = await res.json();
@@ -194,10 +230,16 @@ function TemplateModal({ template, onClose, onSave }: {
                     {/* Imagem */}
                     <div>
                         <label className="text-xs font-medium text-slate-400 mb-1.5 block">Imagem (opcional)</label>
-                        {imageUrl ? (
+                        {previewUrl ? (
                             <div className="relative rounded-xl overflow-hidden bg-slate-800 border border-slate-700">
-                                <img src={imageUrl} alt="" className="w-full max-h-40 object-cover" />
-                                <button onClick={() => { setImageUrl(""); setImageCaption(""); }}
+                                <img src={getProxiedImageUrl(previewUrl)} alt="Preview da imagem" className="w-full max-h-40 object-cover" />
+                                {selectedFile && (
+                                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-black/70 px-2.5 py-1 rounded-lg">
+                                        <ImageIcon className="w-3 h-3 text-blue-400" />
+                                        <span className="text-[11px] text-blue-300">Será enviada ao salvar</span>
+                                    </div>
+                                )}
+                                <button onClick={handleRemoveImage}
                                     className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white hover:bg-red-600 transition-all">
                                     <X className="w-4 h-4" />
                                 </button>
@@ -205,16 +247,15 @@ function TemplateModal({ template, onClose, onSave }: {
                         ) : (
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                disabled={uploading}
                                 className="w-full border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-xl p-6 flex flex-col items-center gap-2 text-slate-500 hover:text-blue-400 transition-all group"
                             >
-                                {uploading ? <Loader2 className="w-8 h-8 animate-spin" /> : <ImageIcon className="w-8 h-8 group-hover:scale-110 transition-transform" />}
-                                <span className="text-sm">{uploading ? "Carregando..." : "Clique para adicionar imagem"}</span>
+                                <ImageIcon className="w-8 h-8 group-hover:scale-110 transition-transform" />
+                                <span className="text-sm">Clique para adicionar imagem</span>
                             </button>
                         )}
                         <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-                        {imageUrl && (
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }} />
+                        {previewUrl && (
                             <input value={imageCaption} onChange={e => setImageCaption(e.target.value)}
                                 placeholder="Legenda da imagem (opcional)"
                                 maxLength={1024}
@@ -250,7 +291,7 @@ function TemplateModal({ template, onClose, onSave }: {
                             className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors mb-2">
                             <Eye className="w-3.5 h-3.5" />{showPreview ? "Ocultar" : "Ver"} pré-visualização
                         </button>
-                        {showPreview && <WhatsAppPreview body={body} imageUrl={imageUrl} imageCaption={imageCaption} />}
+                        {showPreview && <WhatsAppPreview body={body} imageUrl={previewUrl} imageCaption={imageCaption} />}
                     </div>
                 </div>
 
@@ -258,7 +299,12 @@ function TemplateModal({ template, onClose, onSave }: {
                     <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all text-sm">Cancelar</button>
                     <button onClick={handleSave} disabled={saving}
                         className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-all text-sm disabled:opacity-50">
-                        {saving ? "Salvando..." : template ? "Salvar Alterações" : "Criar Template"}
+                        {saving ? (
+                            <span className="flex items-center justify-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                {selectedFile ? "Enviando imagem..." : "Salvando..."}
+                            </span>
+                        ) : (template ? "Salvar Alterações" : "Criar Template")}
                     </button>
                 </div>
             </div>
@@ -812,7 +858,7 @@ export default function BroadcastsPage() {
                                     <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-600 transition-all group">
                                         {t.image_url && (
                                             <div className="h-32 bg-slate-800 overflow-hidden">
-                                                <img src={t.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                <img src={getProxiedImageUrl(t.image_url)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                             </div>
                                         )}
                                         <div className="p-4">

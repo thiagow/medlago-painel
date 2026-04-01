@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { r2, R2_BUCKET_NAME } from "@/lib/r2";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 
 // GET /api/broadcasts - Lista broadcasts (e permite filtro por data)
@@ -111,6 +114,28 @@ export async function POST(request: NextRequest) {
         if (!isScheduled) {
             const N8N_BROADCAST_WEBHOOK = process.env.N8N_BROADCAST_WEBHOOK;
             if (N8N_BROADCAST_WEBHOOK) {
+                // Geração de Pre-signed URL para segurança e acesso externo (validade de 30 mins)
+                let presignedImageUrl = template.image_url || null;
+                if (template.image_url && template.image_url.includes("r2.cloudflarestorage.com")) {
+                    try {
+                        const urlObj = new URL(template.image_url);
+                        const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                        const key = pathParts.length > 1 && pathParts[0] === R2_BUCKET_NAME 
+                            ? pathParts.slice(1).join("/") 
+                            : pathParts.join("/");
+
+                        if (key) {
+                            const command = new GetObjectCommand({
+                                Bucket: R2_BUCKET_NAME,
+                                Key: decodeURIComponent(key),
+                            });
+                            presignedImageUrl = await getSignedUrl(r2, command, { expiresIn: 1800 });
+                        }
+                    } catch (err) {
+                        console.error("[Broadcast] Erro ao gerar pre-signed URL:", err);
+                    }
+                }
+
                 try {
                     const response = await fetch(N8N_BROADCAST_WEBHOOK, {
                         method: "POST",
@@ -119,7 +144,7 @@ export async function POST(request: NextRequest) {
                             broadcast_id: broadcastId,
                             template: {
                                 body: template.body || null,
-                                image_url: template.image_url || null,
+                                image_url: presignedImageUrl,
                                 image_caption: template.image_caption || null,
                             },
                             recipients: validPatients.map((p: any) => ({
