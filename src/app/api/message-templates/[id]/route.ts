@@ -10,7 +10,7 @@ export async function PUT(
     try {
         const user = await getAuthUser(request);
         if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-        if (user.role !== "admin") return NextResponse.json({ error: "Apenas admins podem editar templates" }, { status: 403 });
+        if (user.role !== "admin" && user.role !== "atendente") return NextResponse.json({ error: "Apenas admins e atendentes podem editar templates" }, { status: 403 });
 
         const { id } = await params;
         const body = await request.json();
@@ -57,7 +57,7 @@ export async function DELETE(
     try {
         const user = await getAuthUser(request);
         if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-        if (user.role !== "admin") return NextResponse.json({ error: "Apenas admins podem excluir templates" }, { status: 403 });
+        if (user.role !== "admin" && user.role !== "atendente") return NextResponse.json({ error: "Apenas admins e atendentes podem excluir templates" }, { status: 403 });
 
         const { id } = await params;
 

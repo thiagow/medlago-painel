@@ -63,7 +63,7 @@ export async function DELETE(
     try {
         const user = await getAuthUser(request);
         if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-        if (user.role !== "admin") return NextResponse.json({ error: "Apenas admins" }, { status: 403 });
+        if (user.role !== "admin" && user.role !== "atendente") return NextResponse.json({ error: "Apenas admins e atendentes" }, { status: 403 });
 
         const { id } = await params;
 

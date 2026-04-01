@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     try {
         const user = await getAuthUser(request);
         if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-        if (user.role !== "admin") return NextResponse.json({ error: "Apenas admins podem criar templates" }, { status: 403 });
+        if (user.role !== "admin" && user.role !== "atendente") return NextResponse.json({ error: "Apenas admins e atendentes podem criar templates" }, { status: 403 });
 
         const body = await request.json();
         const { name, body: messageBody, image_url, image_caption } = body;

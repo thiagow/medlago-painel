@@ -105,7 +105,7 @@ export default function DashboardLayout({
             label: "Pacientes",
             id: "nav-patients",
         },
-        ...(isAdmin()
+        ...((isAdmin() || user?.role === "atendente")
             ? [
                 {
                     href: "/dashboard/broadcasts",
