@@ -158,6 +158,7 @@ model Agendamento {
   unidade_id          Int?
   paciente_cpf        String?
   status              String?
+  motivo              String?   @db.Text
 
   @@map("agendamentos")
 }

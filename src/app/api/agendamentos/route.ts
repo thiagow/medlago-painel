@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
                 a.horario::text AS horario,
                 a.paciente_cpf,
                 a.status,
+                a.motivo,
                 a.unidade_id,
                 a.convenio_id,
                 a.profissional_id,
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
             convenio_nome: r.convenio_nome ?? null,
             unidade_id: r.unidade_id ? Number(r.unidade_id) : null,
             status: r.status ?? "agendado",
+            motivo: r.motivo ?? null,
         }));
 
         return NextResponse.json({ agendamentos });

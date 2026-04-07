@@ -14,6 +14,11 @@ import {
     CreditCard,
     FileText,
     Calendar,
+    CheckCircle2,
+    AlertCircle,
+    XCircle,
+    Loader2,
+    MessageSquare,
 } from "lucide-react";
 import {
     format,
@@ -53,13 +58,15 @@ interface Agendamento {
     convenio_nome: string | null;
     unidade_id: number | null;
     status: string;
+    motivo: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function statusColor(status: string): string {
     switch (status.toLowerCase()) {
-        case "agendado":    return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+        case "agendado":    return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+        case "pendente":    return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
         case "confirmado":  return "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
         case "cancelado":   return "bg-red-500/20 text-red-300 border-red-500/30";
         case "atendido":    return "bg-violet-500/20 text-violet-300 border-violet-500/30";
@@ -69,12 +76,52 @@ function statusColor(status: string): string {
 
 function statusDot(status: string): string {
     switch (status.toLowerCase()) {
-        case "agendado":    return "bg-blue-400";
+        case "agendado":    return "bg-orange-400";
+        case "pendente":    return "bg-yellow-400";
         case "confirmado":  return "bg-emerald-400";
         case "cancelado":   return "bg-red-400";
         case "atendido":    return "bg-violet-400";
         default:            return "bg-slate-400";
     }
+}
+
+function statusLabel(status: string): string {
+    switch (status.toLowerCase()) {
+        case "agendado":    return "Novo";
+        case "pendente":    return "Pendente";
+        case "confirmado":  return "Aprovado";
+        case "cancelado":   return "Cancelado";
+        case "atendido":    return "Atendido";
+        default:            return status;
+    }
+}
+
+const LEGEND_ITEMS = [
+    { status: "agendado",   label: "Novo (Aguardando verificação)", dot: "bg-orange-400",  bg: "bg-orange-500/10",  border: "border-orange-500/20" },
+    { status: "pendente",   label: "Pendente (Documentos/Info)",    dot: "bg-yellow-400",  bg: "bg-yellow-500/10",  border: "border-yellow-500/20" },
+    { status: "confirmado", label: "Aprovado (Confirmado)",         dot: "bg-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+    { status: "cancelado",  label: "Cancelado",                     dot: "bg-red-400",     bg: "bg-red-500/10",     border: "border-red-500/20" },
+];
+
+// ─── Legenda de Cores ──────────────────────────────────────────────────────────
+
+function StatusLegend() {
+    return (
+        <div className="px-6 py-2.5 border-b border-slate-800 bg-slate-900/50">
+            <div className="flex items-center gap-5 flex-wrap">
+                <span className="text-xs text-slate-500 font-medium mr-1">Legenda:</span>
+                {LEGEND_ITEMS.map(({ status, label, dot, bg, border }) => (
+                    <div
+                        key={status}
+                        className={`flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border ${bg} ${border}`}
+                    >
+                        <span className={`w-2 h-2 rounded-full ${dot}`} />
+                        <span className="text-slate-300">{label}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 function formatHorario(horario: string | null): string {
@@ -92,13 +139,74 @@ const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7h - 19h
 
 // ─── Modal de Detalhes ─────────────────────────────────────────────────────────
 
-function DetailModal({ ag, onClose }: { ag: Agendamento; onClose: () => void }) {
+const STATUS_ACTIONS = [
+    { value: "confirmado", label: "Aprovado",  icon: CheckCircle2, color: "bg-emerald-600 hover:bg-emerald-500", activeRing: "ring-emerald-400" },
+    { value: "pendente",   label: "Pendente",  icon: AlertCircle,  color: "bg-yellow-600 hover:bg-yellow-500",  activeRing: "ring-yellow-400" },
+    { value: "cancelado",  label: "Cancelado", icon: XCircle,      color: "bg-red-600 hover:bg-red-500",      activeRing: "ring-red-400" },
+];
+
+// Status que exigem preenchimento do motivo
+const STATUSES_REQUIRING_MOTIVO = ["pendente", "cancelado"];
+
+function DetailModal({
+    ag,
+    onClose,
+    onStatusChange,
+}: {
+    ag: Agendamento;
+    onClose: () => void;
+    onStatusChange: (id: number, newStatus: string, motivo?: string) => Promise<void>;
+}) {
+    const [updating, setUpdating] = useState(false);
+    const [localStatus, setLocalStatus] = useState(ag.status);
+    const [localMotivo, setLocalMotivo] = useState(ag.motivo ?? "");
+    // Status selecionado aguardando confirmação (quando requer motivo)
+    const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+    const [motivoInput, setMotivoInput] = useState("");
+    const [motivoError, setMotivoError] = useState(false);
+
     const dataFormatted = ag.data_atendimento
         ? format(parseISO(ag.data_atendimento), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })
         : "—";
     const criadoEm = ag.created_at
         ? format(parseISO(ag.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
         : "—";
+
+    const canChangeStatus = localStatus.toLowerCase() !== "atendido";
+
+    function handleStatusSelect(newStatus: string) {
+        if (newStatus === localStatus.toLowerCase() || updating) return;
+        if (STATUSES_REQUIRING_MOTIVO.includes(newStatus)) {
+            // Abre o painel de motivo antes de confirmar
+            setPendingStatus(newStatus);
+            setMotivoInput("");
+            setMotivoError(false);
+        } else {
+            // Aprovado: aplica direto sem motivo
+            void handleConfirm(newStatus, undefined);
+        }
+    }
+
+    async function handleConfirm(statusToApply: string, motivo: string | undefined) {
+        setUpdating(true);
+        try {
+            await onStatusChange(ag.id, statusToApply, motivo);
+            setLocalStatus(statusToApply);
+            setLocalMotivo(motivo ?? "");
+            setPendingStatus(null);
+            setMotivoInput("");
+        } finally {
+            setUpdating(false);
+        }
+    }
+
+    function handleMotivoConfirm() {
+        if (!motivoInput.trim()) {
+            setMotivoError(true);
+            return;
+        }
+        void handleConfirm(pendingStatus!, motivoInput.trim());
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -109,14 +217,14 @@ function DetailModal({ ag, onClose }: { ag: Agendamento; onClose: () => void }) 
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-slate-800">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                            <CalendarCheck className="w-5 h-5 text-blue-400" />
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${statusColor(localStatus).split(' ')[0]}`}>
+                            <CalendarCheck className={`w-5 h-5 ${statusColor(localStatus).split(' ')[1]}`} />
                         </div>
                         <div>
                             <h2 className="text-base font-semibold text-white">Detalhes do Agendamento</h2>
-                            <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-0.5 ${statusColor(ag.status)}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(ag.status)}`} />
-                                {ag.status.charAt(0).toUpperCase() + ag.status.slice(1)}
+                            <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-0.5 ${statusColor(localStatus)}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(localStatus)}`} />
+                                {statusLabel(localStatus)}
                             </span>
                         </div>
                     </div>
@@ -144,6 +252,90 @@ function DetailModal({ ag, onClose }: { ag: Agendamento; onClose: () => void }) 
                     <Row icon={<CreditCard className="w-4 h-4 text-amber-400" />} label="Convênio">
                         <p className="text-white text-sm">{ag.convenio_nome ?? (ag.convenio_id ? `ID ${ag.convenio_id}` : "—")}</p>
                     </Row>
+
+                    {/* Motivo salvo (quando existe) */}
+                    {localMotivo && !pendingStatus && (
+                        <Row icon={<MessageSquare className="w-4 h-4 text-amber-400" />} label="Motivo">
+                            <p className="text-white text-sm">{localMotivo}</p>
+                        </Row>
+                    )}
+
+                    {/* Alterar Situação */}
+                    {canChangeStatus && (
+                        <div className="pt-3 border-t border-slate-800">
+                            <p className="text-xs text-slate-500 mb-2.5 font-medium">Alterar Situação</p>
+                            <div className="flex gap-2">
+                                {STATUS_ACTIONS.map(({ value, label, icon: Icon, color, activeRing }) => {
+                                    const isActive = localStatus.toLowerCase() === value;
+                                    const isPending = pendingStatus === value;
+                                    return (
+                                        <button
+                                            key={value}
+                                            onClick={() => handleStatusSelect(value)}
+                                            disabled={updating}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white transition-all
+                                                ${isActive || isPending ? `${color} ring-2 ${activeRing} shadow-lg` : `${color} opacity-50 hover:opacity-100`}
+                                                ${updating ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}
+                                            `}
+                                        >
+                                            {updating && isPending ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Icon className="w-3.5 h-3.5" />
+                                            )}
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Campo de motivo — aparece quando seleciona Pendente ou Cancelado */}
+                            {pendingStatus && STATUSES_REQUIRING_MOTIVO.includes(pendingStatus) && (
+                                <div className="mt-3 space-y-2">
+                                    <label className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                        Motivo <span className="text-red-400">*</span>
+                                        <span className="text-slate-600 font-normal">(obrigatório para {statusLabel(pendingStatus).toLowerCase()})</span>
+                                    </label>
+                                    <textarea
+                                        value={motivoInput}
+                                        onChange={(e) => { setMotivoInput(e.target.value); setMotivoError(false); }}
+                                        placeholder={`Descreva o motivo para ${statusLabel(pendingStatus).toLowerCase()} este agendamento...`}
+                                        rows={3}
+                                        className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 resize-none focus:outline-none focus:ring-2 transition-all
+                                            ${motivoError
+                                                ? "border-red-500 focus:ring-red-500/30"
+                                                : "border-slate-700 focus:ring-blue-500/30 focus:border-slate-600"
+                                            }`}
+                                    />
+                                    {motivoError && (
+                                        <p className="text-xs text-red-400 flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" />
+                                            Informe o motivo antes de confirmar.
+                                        </p>
+                                    )}
+                                    <div className="flex gap-2 pt-1">
+                                        <button
+                                            onClick={() => { setPendingStatus(null); setMotivoInput(""); setMotivoError(false); }}
+                                            disabled={updating}
+                                            className="flex-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 bg-slate-800 hover:bg-slate-700 hover:text-white transition-all border border-slate-700"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={handleMotivoConfirm}
+                                            disabled={updating}
+                                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition-all"
+                                        >
+                                            {updating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                            Confirmar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="pt-2 border-t border-slate-800">
                         <p className="text-xs text-slate-500">Agendado em {criadoEm}</p>
                     </div>
@@ -374,7 +566,7 @@ function ListView({ agendamentos, onSelect }: { agendamentos: Agendamento[]; onS
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-sm font-semibold text-white truncate">{ag.paciente_nome ?? ag.paciente_cpf ?? "—"}</span>
                                     <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full border ${statusColor(ag.status)}`}>
-                                        {ag.status}
+                                        {statusLabel(ag.status)}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -494,6 +686,9 @@ export default function AgendamentosPage() {
                 </div>
             </div>
 
+            {/* Legenda de Cores */}
+            <StatusLegend />
+
             {/* Conteúdo */}
             {loading ? (
                 <div className="flex-1 flex items-center justify-center">
@@ -512,7 +707,28 @@ export default function AgendamentosPage() {
             )}
 
             {/* Modal */}
-            {selected && <DetailModal ag={selected} onClose={() => setSelected(null)} />}
+            {selected && (
+                <DetailModal
+                    ag={selected}
+                    onClose={() => setSelected(null)}
+                    onStatusChange={async (id, newStatus, motivo) => {
+                        const res = await fetch(`/api/agendamentos/${id}/status`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: newStatus, motivo }),
+                        });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.error ?? "Erro ao atualizar status");
+                        }
+                        // Atualizar o estado local
+                        setAgendamentos((prev) =>
+                            prev.map((a) => (a.id === id ? { ...a, status: newStatus, motivo: motivo ?? null } : a))
+                        );
+                        setSelected((prev) => (prev && prev.id === id ? { ...prev, status: newStatus, motivo: motivo ?? null } : prev));
+                    }}
+                />
+            )}
         </div>
     );
 }
