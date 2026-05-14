@@ -1,0 +1,753 @@
+{
+  "name": "disparos-msg-agendado-medlago",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtMinute": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        7376,
+        2624
+      ],
+      "id": "308bab43-cd7d-40d5-8aaa-b57a7a44a258",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-0001-0001-0001-000000000001",
+              "name": "evoAPIKey",
+              "value": "2d114856-315c-433a-96fb-5012c852c3c1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "88d1e822-0f61-48e5-a365-d4c2d0201952",
+      "name": "Variáveis",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7376,
+        2448
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-hora-inicio",
+              "leftValue": "={{ new Date().getHours() }}",
+              "rightValue": "8",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "cond-hora-fim",
+              "leftValue": "={{ new Date().getHours() }}",
+              "rightValue": "17",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        7600,
+        2624
+      ],
+      "id": "4f22a0a5-53bf-4053-af9c-6b7ed05f4258",
+      "name": "verificaHorario"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, template_body, image_url, scheduled_at, status\nFROM broadcasts\nWHERE status = 'pending'\n  AND scheduled_at <= NOW()\n  AND scheduled_at >= NOW() - INTERVAL '1 hour'\nORDER BY scheduled_at ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7824,
+        2624
+      ],
+      "id": "9550cbec-5d6a-4d07-ae3d-689bdaff8b8e",
+      "name": "buscaBroadcast",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "filter-broadcast-id",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        8048,
+        2624
+      ],
+      "id": "98bf4df7-df0a-4208-93b7-69c9ef2a971f",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        8256,
+        2624
+      ],
+      "id": "adf2504c-a082-4137-89f4-0cda636c1e39",
+      "name": "Loop Over Broadcasts"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcasts SET status = 'processing' WHERE id = '{{ $json.id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        8480,
+        2624
+      ],
+      "id": "78aace87-2a04-4b4c-a9f0-395f1b0199ed",
+      "name": "marcaBroadcastEmAndamento",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, broadcast_id, patient_id, phone, name, status, sent_at, error FROM broadcast_recipients WHERE broadcast_id = '{{ $('Loop Over Broadcasts').item.json.id }}' AND (status IS NULL OR status != 'sent')",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        8704,
+        2624
+      ],
+      "id": "0e6d1386-40e0-459f-8a4b-5f509cbf5baa",
+      "name": "buscaListaDisparo",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        8928,
+        2624
+      ],
+      "id": "bff57fe8-8900-4ec0-ade9-31c005dd0b63",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000001",
+              "name": "mensagem",
+              "value": "={{ \n  (() => {\n    const hoje = new Date();\n    const amanha = new Date(hoje);\n    amanha.setDate(amanha.getDate() + 1);\n\n    const formata = (d) => \n      String(d.getDate()).padStart(2, '0') + '/' +\n      String(d.getMonth() + 1).padStart(2, '0') + '/' +\n      d.getFullYear();\n\n    return $('Loop Over Broadcasts').item.json.template_body\n      .replace('{nome}', $json.name)\n      .replace('{hoje}', formata(hoje))\n      .replace('{amanha}', formata(amanha));\n  })()\n}}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000002",
+              "name": "telefone",
+              "value": "={{ $json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000003",
+              "name": "recipient_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000004",
+              "name": "broadcast_id",
+              "value": "={{ $('Loop Over Broadcasts').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000005",
+              "name": "image_url",
+              "value": "={{ $('Loop Over Broadcasts').item.json.image_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "521df1d5-b5f2-443d-8fc2-93817c8d578e",
+      "name": "formataMensagem",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        9136,
+        2624
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(resolve => \n  setTimeout(resolve, (Math.floor(Math.random() * 31) + 10) * 1000)\n);\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9360,
+        2624
+      ],
+      "id": "0ead2aff-057e-4fb9-8bb8-06892318473b",
+      "name": "Wait"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-tem-imagem",
+              "leftValue": "={{ $json.image_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        9584,
+        2624
+      ],
+      "id": "a1ebee3d-2e3c-4709-89e4-f46083b26714",
+      "name": "temImagem"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://medlago.uazapi.com/send/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Variáveis').first().json.evoAPIKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('formataMensagem').item.json.telefone }}\",\n  \"type\": \"image\",\n  \"file\": \"{{ $('formataMensagem').item.json.image_url }}\"\n}",
+        "options": {}
+      },
+      "id": "c3793b28-89e6-491c-9786-a60d89ead697",
+      "name": "EnviaImagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        9808,
+        2528
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(resolve => \n  setTimeout(resolve, (Math.floor(Math.random() * 31) + 10) * 1000)\n);\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10016,
+        2528
+      ],
+      "id": "f2f1e743-d809-4fba-b150-5bc525bba3e3",
+      "name": "Wait2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://medlago.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Variáveis').first().json.evoAPIKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('formataMensagem').item.json.telefone }}\",\n  \"text\": \"{{ $('formataMensagem').item.json.mensagem.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\\\"') }}\"\n}",
+        "options": {}
+      },
+      "id": "be67f937-11bf-4cdc-abf6-72c48f20b548",
+      "name": "EnviaMensagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10256,
+        2640
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcast_recipients SET status = 'sent', sent_at = NOW() WHERE id = '{{ $('formataMensagem').item.json.recipient_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        10464,
+        2528
+      ],
+      "id": "e98f9404-eac6-42dd-88f2-798eb94ef908",
+      "name": "marcaEnviado",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcast_recipients SET status = 'error', error = '{{ $json.message }}' WHERE id = '{{ $('formataMensagem').item.json.recipient_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        10496,
+        2880
+      ],
+      "id": "7b4b7542-9fa3-414c-aeac-7995d341dc0b",
+      "name": "marcaErro",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "978365c2-4a2d-4880-9334-7b2e77eefd3a",
+      "name": "voltaLoop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        10688,
+        2624
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcasts SET status = 'completed' WHERE id = '{{ $('formataMensagem').first().json.broadcast_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        9136,
+        2448
+      ],
+      "id": "4420b122-1546-4259-80e0-a980793e18ca",
+      "name": "marcaBroadcastConcluido",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c071fadd-61cd-4645-834c-738a6e847634",
+      "name": "voltaLoopBroadcasts",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        9360,
+        2448
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Variáveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Variáveis": {
+      "main": [
+        [
+          {
+            "node": "verificaHorario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verificaHorario": {
+      "main": [
+        [
+          {
+            "node": "buscaBroadcast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscaBroadcast": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Broadcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Broadcasts": {
+      "main": [
+        [
+          {
+            "node": "marcaBroadcastConcluido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "marcaBroadcastEmAndamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "marcaBroadcastEmAndamento": {
+      "main": [
+        [
+          {
+            "node": "buscaListaDisparo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscaListaDisparo": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "marcaBroadcastConcluido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "formataMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formataMensagem": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "temImagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "temImagem": {
+      "main": [
+        [
+          {
+            "node": "EnviaImagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "EnviaMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EnviaImagem": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "marcaErro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "EnviaMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EnviaMensagem": {
+      "main": [
+        [
+          {
+            "node": "marcaEnviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "marcaErro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "marcaEnviado": {
+      "main": [
+        [
+          {
+            "node": "voltaLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "marcaErro": {
+      "main": [
+        [
+          {
+            "node": "voltaLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "voltaLoop": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "marcaBroadcastConcluido": {
+      "main": [
+        [
+          {
+            "node": "voltaLoopBroadcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "voltaLoopBroadcasts": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Broadcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3ac6d775-141d-478e-9db8-131add7191f7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "lOTs38gI7Q0J7lnt",
+  "tags": [
+    {
+      "updatedAt": "2026-03-20T22:56:37.888Z",
+      "createdAt": "2026-03-20T22:56:37.888Z",
+      "id": "o9imbyjqdzq6b9js",
+      "name": "FLUX"
+    }
+  ]
+}

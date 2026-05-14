@@ -1,0 +1,242 @@
+{
+  "name": "ENCERRA CHATS INATIVOS — IA",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        112
+      ],
+      "id": "5d2766af-b1bd-4412-8a66-70e07b3a52fd",
+      "name": "scheduleTrigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  c.id::text,\n  c.phone,\n  c.conversation_id,\n  c.ai_service,\n  c.status,\n  c.updated_at::text,\n  MAX(cm.created_at)::text AS ultima_mensagem_bot\nFROM chats c\nINNER JOIN chat_messages cm\n  ON cm.conversation_id = c.conversation_id\n  AND cm.bot_message IS NOT NULL\n  AND cm.bot_message <> ''\n  AND cm.active = true\nWHERE\n  c.finished = false\n  AND c.ai_service = 'active'\nGROUP BY\n  c.id,\n  c.phone,\n  c.conversation_id,\n  c.ai_service,\n  c.status,\n  c.updated_at\nHAVING\n  MAX(cm.created_at) < NOW() - INTERVAL '2 hours'\nORDER BY MAX(cm.created_at) ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -480,
+        112
+      ],
+      "id": "8ed386e1-e08d-4861-9b51-ff8a88c7bf42",
+      "name": "buscaChatsInativos",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-check-results",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        112
+      ],
+      "id": "904e6793-a6a1-49cc-8365-834025fc5fa6",
+      "name": "verificaSeExistemChats"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://medlago.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $vars.UAZAPI_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"instance\": \"medlago-agente\",\n  \"number\": \"{{ $json.phone }}\",\n  \"text\": \"Olá! 👋\\n\\nPercebemos que não houve interação em nossa conversa há algum tempo.\\n\\nPor isso, estamos encerrando este atendimento automaticamente para manter o seu atendimento sempre ágil.\\n\\nSempre que precisar, é só nos enviar uma nova mensagem que a *Lilian* estará pronta para te atender! 😊\\n\\n_Clínica MedLago — Cuidando de você com excelência._\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fb4f2782-a18d-41d1-926f-403763eec787",
+      "name": "enviaMensagemEncerramento",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE chats\nSET\n  ai_service = 'finished',\n  status     = 'finished',\n  finished   = true,\n  updated_at = NOW()\nWHERE\n  id = '{{ $('buscaChatsInativos').item.json.id }}'::uuid;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "id": "2ec9a4ff-344c-47ca-9cd5-1a0d35de5020",
+      "name": "encerraChat",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO chat_messages\n  (conversation_id, phone, user_message, bot_message, created_at, active)\nVALUES\n  (\n    '{{ $('buscaChatsInativos').item.json.conversation_id }}',\n    '{{ $('buscaChatsInativos').item.json.phone }}',\n    '',\n    'Atendimento encerrado automaticamente por inatividade. Última resposta da IA registrada em: {{ $('buscaChatsInativos').item.json.ultima_mensagem_bot }}',\n    NOW(),\n    true\n  );",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        0
+      ],
+      "id": "3b6c769d-bf50-46de-b3ae-2ed1563e88fa",
+      "name": "gravaLogEncerramento",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        288
+      ],
+      "id": "c74f32f0-e14a-4c80-bc95-3ceb14721a53",
+      "name": "nenhumChatInativo"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "scheduleTrigger": {
+      "main": [
+        [
+          {
+            "node": "buscaChatsInativos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscaChatsInativos": {
+      "main": [
+        [
+          {
+            "node": "verificaSeExistemChats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verificaSeExistemChats": {
+      "main": [
+        [
+          {
+            "node": "enviaMensagemEncerramento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "nenhumChatInativo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviaMensagemEncerramento": {
+      "main": [
+        [
+          {
+            "node": "encerraChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "encerraChat": {
+      "main": [
+        [
+          {
+            "node": "gravaLogEncerramento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "20b1b6cb-ffb6-4089-b645-58c9a5b40617",
+  "meta": {
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "qj5wMpY4gwuG3e8T",
+  "tags": []
+}

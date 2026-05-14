@@ -1,0 +1,123 @@
+{
+  "name": "Tool - Busca Agenda",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.igut.med.br/v2/consultas/buscar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client_token",
+              "value": "bWVkbGFnbw=="
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Paciente.cpf\": \"{{ $('When Executed by Another Workflow').item.json.cpf_paciente }}\",\n  \"Agendamento.confirmado\": 2,\n  \"Agendamento.status\": 3\n}",
+        "options": {}
+      },
+      "id": "fb5b8bfd-0a23-4346-ab48-890fe09fb128",
+      "name": "Buscar na API Externa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        416,
+        1344
+      ],
+      "notes": "Coloque aqui a URL correta da sua API externa"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cpf_paciente"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -64,
+        1344
+      ],
+      "id": "c2a4ab60-0f3f-4b6f-bf0b-d7715cc0d721",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT token, expires_at \nFROM config_tokens \nWHERE service = 'igut_api' \n  AND expires_at > NOW()\nORDER BY updated_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        176,
+        1344
+      ],
+      "id": "f5a35bae-b66e-4ce8-be74-70d36a04ec58",
+      "name": "Buscar Token iGUT",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "cpf_paciente": "646.123.841-72"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Buscar Token iGUT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Token iGUT": {
+      "main": [
+        [
+          {
+            "node": "Buscar na API Externa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "87d8e66b-953a-4a49-80ad-5892dd9fb631",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "f3wQbGmpPUypP28v",
+  "tags": []
+}

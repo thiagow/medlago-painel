@@ -1,0 +1,126 @@
+{
+  "name": "Tool - Horarios",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "nome_medico"
+            },
+            {
+              "name": "nome_convenio"
+            },
+            {
+              "name": "especialidade"
+            },
+            {
+              "name": "data_inicio"
+            },
+            {
+              "name": "data_fim"
+            },
+            {
+              "name": "atendimento_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        1344
+      ],
+      "id": "5d96a552-2e05-4e82-85d1-7f0cee7fa87d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuração do Fuso Horário (Brasil é -03:00)\nconst OFFSET_BRASIL = \"-03:00\";\nconst agora = new Date();\n\n// Filtra diretamente os itens que vieram do nó do Postgres\nconst itensFiltrados = items.filter(item => {\n  try {\n    // Adicionamos o '?' (optional chaining) para evitar erro caso o Postgres devolva um item vazio\n    const dataBr = item?.json?.data_formatada; \n    const horaStr = item?.json?.horario;       \n\n    if (!dataBr || !horaStr) return false;\n\n    // Converte a data do formato DD/MM/YYYY para YYYY-MM-DD\n    const partesData = dataBr.split('/');\n    if (partesData.length !== 3) return false;\n    const dataIsoStr = `${partesData[2]}-${partesData[1]}-${partesData[0]}`; \n\n    // Monta a data ISO com fuso\n    const stringDataCompleta = `${dataIsoStr}T${horaStr}${OFFSET_BRASIL}`;\n    const dataSlot = new Date(stringDataCompleta);\n\n    // Se a data for inválida por algum motivo, remove o item\n    if (isNaN(dataSlot.getTime())) return false;\n\n    // Compara com AGORA (mantém apenas se for no futuro)\n    return dataSlot.getTime() > agora.getTime();\n\n  } catch (e) {\n    return false; \n  }\n});\n\n// ==========================================\n// NOVA VERIFICAÇÃO DE VAZIO\n// ==========================================\nif (itensFiltrados.length === 0) {\n  return [{\n    json: {\n      mensagem: \"Não há horários disponíveis\",\n      status: \"sem_vagas\"\n    }\n  }];\n}\n\n// Retorna apenas os slots que passaram no filtro (horários futuros)\nreturn itensFiltrados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        1344
+      ],
+      "id": "e11ae2a8-3847-4f77-b926-68c7ed6762b3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    horario,\n    nome_medico,\n    TO_CHAR(data, 'DD/MM/YYYY') as data_formatada,\n    status\nFROM igut_horarios_espelho\nWHERE\n    '{{ $fromAI(\"nome_medico\") }}' != ''\n    AND UNACCENT(UPPER(nome_medico)) = UNACCENT(UPPER(\n        REGEXP_REPLACE(\n            TRIM('{{ $fromAI(\"nome_medico\") }}'),\n            '^(dr|dra|dr\\.|dra\\.|medico|médico)\\s+', '', 'i'\n        )\n    ))\n    AND data BETWEEN\n        TO_DATE('{{ $fromAI(\"data_inicio\") }}', 'DD/MM/YYYY') AND\n        TO_DATE('{{ $fromAI(\"data_fim\") }}', 'DD/MM/YYYY')\n    AND status = 'disponivel'\nORDER BY data, horario;",
+        "options": {}
+      },
+      "id": "3ea56d58-6789-4923-9501-f7140041ea62",
+      "name": "queryHorariosDisponiveis",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        16,
+        1344
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      },
+      "notes": "Ajuste os nomes das tabelas (public.medicos, etc) conforme seu banco"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "nome_medico": "Alexandre da Motta Amaral",
+          "nome_convenio": "",
+          "especialidade": "Consulta Endocrinologia",
+          "data_inicio": "18/04/2026",
+          "data_fim": "25/04/2026",
+          "atendimento_id": "190"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "queryHorariosDisponiveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "queryHorariosDisponiveis": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1be914cf-f681-44fe-8891-22cf6f78e80b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "D62cJoT99QHUpRZq",
+  "tags": []
+}

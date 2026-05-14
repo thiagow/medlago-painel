@@ -1,0 +1,535 @@
+{
+  "name": "disparados-msg-manual-medlago",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ce6d35bb-e4b4-4bf8-9579-0d46697b6c88",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        6576,
+        2736
+      ],
+      "id": "42d3c5d9-3e0d-4177-af6e-2296a3818cc7",
+      "name": "Webhook",
+      "webhookId": "ce6d35bb-e4b4-4bf8-9579-0d46697b6c88"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dee715f2-3a27-421b-b195-d8dbe487b750",
+              "name": "template",
+              "value": "={{ $json.body.template.body }}",
+              "type": "string"
+            },
+            {
+              "id": "4457d17b-3a1c-46c7-bf42-e220567c6ccc",
+              "name": "broadcast_id",
+              "value": "={{ $json.body.broadcast_id }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0001-0001-0001-000000000001",
+              "name": "image_url",
+              "value": "={{ $json.body.template.image_url }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0001-0001-0001-000000000002",
+              "name": "evoAPIKey",
+              "value": "2d114856-315c-433a-96fb-5012c852c3c1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1bd111a6-0fa8-4bfd-a31e-c65527f99e82",
+      "name": "Variáveis",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        6800,
+        2736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, broadcast_id, patient_id, phone, name, status, sent_at, error FROM broadcast_recipients WHERE broadcast_id = '{{ $json.broadcast_id }}' AND (status IS NULL OR status != 'sent')",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7024,
+        2736
+      ],
+      "id": "ffa79dc7-e6bc-4cf5-b3bb-695ed5b1bab3",
+      "name": "buscaListaDisparo",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        7248,
+        2736
+      ],
+      "id": "a9e7de60-0f73-4ed2-a9a4-3994f714cd92",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000001",
+              "name": "mensagem",
+              "value": "={{ \n  (() => {\n    const hoje = new Date();\n    const amanha = new Date(hoje);\n    amanha.setDate(amanha.getDate() + 1);\n\n    const formata = (d) => \n      String(d.getDate()).padStart(2, '0') + '/' +\n      String(d.getMonth() + 1).padStart(2, '0') + '/' +\n      d.getFullYear();\n\n    return $('Variáveis').first().json.template\n      .replace('{nome}', $json.name)\n      .replace('{hoje}', formata(hoje))\n      .replace('{amanha}', formata(amanha));\n  })()\n}}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000002",
+              "name": "telefone",
+              "value": "={{ $json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000003",
+              "name": "recipient_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b1c2d3e4-0002-0002-0002-000000000004",
+              "name": "image_url",
+              "value": "={{ $('Variáveis').first().json.image_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f56ae4f3-48bd-41f2-a07a-5f1db1c60fb1",
+      "name": "formataMensagem",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7456,
+        2736
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(resolve => \n  setTimeout(resolve, (Math.floor(Math.random() * 31) + 10) * 1000)\n);\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7680,
+        2736
+      ],
+      "id": "fc5acabe-37c2-4f21-98e7-147072265720",
+      "name": "Wait"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-tem-imagem",
+              "leftValue": "={{ $json.image_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        7904,
+        2736
+      ],
+      "id": "c44bca55-a842-4dd3-a2de-38e154de715a",
+      "name": "temImagem"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://medlago.uazapi.com/send/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Variáveis').first().json.evoAPIKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('formataMensagem').item.json.telefone }}\",\n  \"type\": \"image\",\n  \"file\": \"{{ $('formataMensagem').item.json.image_url }}\"\n}",
+        "options": {}
+      },
+      "id": "4ef83817-065a-48d6-89e0-b11dfee451ac",
+      "name": "EnviaImagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8128,
+        2640
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(resolve => \n  setTimeout(resolve, (Math.floor(Math.random() * 31) + 10) * 1000)\n);\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8336,
+        2640
+      ],
+      "id": "2e59f399-b1ab-4e19-a317-800f5452981f",
+      "name": "Wait2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://medlago.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Variáveis').first().json.evoAPIKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('formataMensagem').item.json.telefone }}\",\n  \"text\": \"{{ $('formataMensagem').item.json.mensagem.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\\\"') }}\"\n}",
+        "options": {}
+      },
+      "id": "10ccb518-1345-4570-b199-74f220f1ea7f",
+      "name": "EnviaMensagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8560,
+        2736
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcast_recipients SET status = 'sent', sent_at = NOW() WHERE id = '{{ $('formataMensagem').item.json.recipient_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        8784,
+        2640
+      ],
+      "id": "ab78d3f8-321a-4f86-ad23-03cc75663180",
+      "name": "marcaEnviado",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcast_recipients SET status = 'error', error = '{{ $json.message }}' WHERE id = '{{ $('formataMensagem').item.json.recipient_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        8784,
+        2832
+      ],
+      "id": "3c2e227a-c114-4cc1-83d6-3b42f1ab2df1",
+      "name": "marcaErro",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "e7bb0a4c-8be7-402f-945e-58900f2c566a",
+      "name": "voltaLoop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        9008,
+        2736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcasts SET status = 'completed' WHERE id = '{{ $('Variáveis').first().json.broadcast_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7456,
+        2544
+      ],
+      "id": "ba22628d-0e1b-456e-a02a-f72258d99e92",
+      "name": "marcaBroadcastConcluido",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Variáveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Variáveis": {
+      "main": [
+        [
+          {
+            "node": "buscaListaDisparo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscaListaDisparo": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "marcaBroadcastConcluido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "formataMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formataMensagem": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "temImagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "temImagem": {
+      "main": [
+        [
+          {
+            "node": "EnviaImagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "EnviaMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EnviaImagem": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "marcaErro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "EnviaMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EnviaMensagem": {
+      "main": [
+        [
+          {
+            "node": "marcaEnviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "marcaErro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "marcaEnviado": {
+      "main": [
+        [
+          {
+            "node": "voltaLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "marcaErro": {
+      "main": [
+        [
+          {
+            "node": "voltaLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "voltaLoop": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "cf131400-650a-4ac5-8e61-7faea242ee0c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "YiXT4qPrYZcxxF1h",
+  "tags": [
+    {
+      "updatedAt": "2026-03-20T22:56:37.888Z",
+      "createdAt": "2026-03-20T22:56:37.888Z",
+      "id": "o9imbyjqdzq6b9js",
+      "name": "FLUX"
+    }
+  ]
+}

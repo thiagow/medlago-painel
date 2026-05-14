@@ -1,0 +1,287 @@
+{
+  "name": "Tool - Agendamento",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "nome_medico"
+            },
+            {
+              "name": "nome_convenio"
+            },
+            {
+              "name": "especialidade"
+            },
+            {
+              "name": "horario"
+            },
+            {
+              "name": "data_atendimento"
+            },
+            {
+              "name": "tipo_atendimento"
+            },
+            {
+              "name": "cpf_paciente"
+            },
+            {
+              "name": "nome_paciente"
+            },
+            {
+              "name": "data_nascimento"
+            },
+            {
+              "name": "celular_paciente"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2736,
+        1888
+      ],
+      "id": "b1928a25-9133-4992-a142-9255cd3d6ad5",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('When Executed by Another Workflow').item.json;\n\n// Verifica se valor é vazio/nulo/string 'null'\nconst isEmpty = (v) => !v || String(v).trim() === '' || String(v).trim().toLowerCase() === 'null' || String(v).trim().toLowerCase() === 'undefined';\n\n// Escapa aspas simples para uso seguro em SQL\nconst escapeSql = (str) => {\n  if (isEmpty(str)) return '';\n  return String(str).trim().replace(/'/g, \"''\");\n};\n\n// Remove prefixos de médico (Dr., Dra., etc) + escapa\nconst limparNomeMedico = (nome) => {\n  if (isEmpty(nome)) return '';\n  const limpo = String(nome).replace(/^(dr\\.?|dra\\.?|doutor|doutora|médico|medico)\\s+/i, '').trim();\n  return escapeSql(limpo);\n};\n\n// Normaliza data para YYYY-MM-DD\nconst normalizarData = (d) => {\n  if (isEmpty(d)) return '';\n  d = String(d).trim();\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(d)) return d;\n  if (/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(d)) return d.split('/').reverse().join('-');\n  return d;\n};\n\n// Normaliza horário para HH:MM\nconst normalizarHorario = (h) => {\n  if (isEmpty(h)) return '';\n  h = String(h).trim().replace(/h/i, ':').replace(/:$/, ':00').replace(/^(\\d):/, '0$1:');\n  return h;\n};\n\n// CPF limpo — obrigatório\nconst cpfLimpo = (input.cpf_paciente || '').replace(/[^0-9]/g, '');\nif (!cpfLimpo || cpfLimpo.length !== 11) {\n  throw new Error(`CPF inválido ou ausente: '${input.cpf_paciente}'. O agendamento não pode continuar sem CPF válido.`);\n}\n\n// Nome — obrigatório (NOT NULL na tabela pacientes)\n// Se não vier do agente, usa fallback para não travar o fluxo\nconst nomePaciente = isEmpty(input.nome_paciente)\n  ? `Paciente ${cpfLimpo}`\n  : escapeSql(input.nome_paciente);\n\nreturn [{\n  json: {\n    tipo_atendimento:  String(input.tipo_atendimento || ''),\n    nome_paciente:     nomePaciente,\n    celular_paciente:  isEmpty(input.celular_paciente) ? '' : String(input.celular_paciente).replace(/[^0-9]/g, ''),\n    cpf_limpo:         cpfLimpo,\n    data_atendimento:  normalizarData(input.data_atendimento),\n    horario:           normalizarHorario(input.horario),\n    nome_medico_sql:   limparNomeMedico(input.nome_medico),\n    nome_convenio_sql: escapeSql(input.nome_convenio),\n    is_particular:     isEmpty(input.nome_convenio) || input.nome_convenio.toLowerCase().trim() === 'particular'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        1888
+      ],
+      "id": "c499572d-b7ad-4820-83c7-71249980319e",
+      "name": "Normalizar Dados"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    (\n        SELECT id\n        FROM public.profissionais\n        WHERE $1 != ''\n        ORDER BY nome <-> $1\n        LIMIT 1\n    ) AS profesional_id_real,\n    (\n        SELECT id\n        FROM public.convenios\n        WHERE $2 != ''\n          AND $3 = false\n        ORDER BY convenio <-> $2\n        LIMIT 1\n    ) AS convenio_id_real;",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ $json.nome_medico_sql }},{{ $json.nome_convenio_sql }},{{ $json.is_particular }}"
+        }
+      },
+      "id": "521d10ca-92f8-4322-b85d-02ddf0554ec5",
+      "name": "obtem_id_parametros",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3168,
+        1888
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT token, expires_at\nFROM config_tokens\nWHERE service = 'igut_api'\n  AND expires_at > NOW()\nORDER BY updated_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3376,
+        1888
+      ],
+      "id": "cab0e5d4-d38c-4b48-8f2e-25a72a2221a9",
+      "name": "Buscar Token iGUT",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pacientes (nome, cpf, telefone_principal, created_at, updated_at)\nVALUES (\n  $1,\n  $2,\n  NULLIF($3, ''),\n  NOW(),\n  NOW()\n)\nON CONFLICT (cpf) DO UPDATE SET\n  nome = CASE\n    WHEN pacientes.nome LIKE 'Paciente %' THEN EXCLUDED.nome\n    ELSE pacientes.nome\n  END,\n  telefone_principal = COALESCE(\n    NULLIF(EXCLUDED.telefone_principal, ''),\n    pacientes.telefone_principal\n  ),\n  updated_at = NOW();",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ $('Normalizar Dados').item.json.nome_paciente }},={{ $('Normalizar Dados').item.json.cpf_limpo }},={{ $('Normalizar Dados').item.json.celular_paciente }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3600,
+        1888
+      ],
+      "id": "a2bd4308-85b5-46ce-89b4-115d872b6cb2",
+      "name": "Garante Paciente no DB",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.igut.med.br/v2/callcenters/agendar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client_token",
+              "value": "bWVkbGFnbw=="
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Buscar Token iGUT').item.json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Convenio.id\": \"{{ $('obtem_id_parametros').item.json.convenio_id_real }}\",\n  \"Profissional.id\": \"{{ $('obtem_id_parametros').item.json.profesional_id_real }}\",\n  \"Atendimento.id\": \"{{ $('Normalizar Dados').item.json.tipo_atendimento }}\",\n  \"Horario.data\": \"{{ $('Normalizar Dados').item.json.data_atendimento }}\",\n  \"Horario.horario\": \"{{ $('Normalizar Dados').item.json.horario }}\",\n  \"Unidade.id\": \"1\",\n  \"Paciente.cpf\": \"{{ $('Normalizar Dados').item.json.cpf_limpo }}\"\n}",
+        "options": {}
+      },
+      "id": "28c5fbf8-f6f6-4709-8fb6-5af626533102",
+      "name": "Buscar na API Externa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3824,
+        1888
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.agendamentos (\n    convenio_id,\n    profissional_id,\n    tipo_atendimento_id,\n    data_atendimento,\n    horario,\n    unidade_id,\n    paciente_cpf,\n    status\n)\nVALUES (\n    NULLIF($1, '')::bigint,\n    $2::bigint,\n    $3::integer,\n    $4::date,\n    $5::time,\n    1,\n    $6,\n    'agendado'\n)\nRETURNING id, paciente_cpf, data_atendimento, horario, status;",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ $('obtem_id_parametros').item.json.convenio_id_real ?? '' }},={{ $('obtem_id_parametros').item.json.profesional_id_real }},={{ $('Normalizar Dados').item.json.tipo_atendimento }},={{ $('Normalizar Dados').item.json.data_atendimento }},={{ $('Normalizar Dados').item.json.horario }},={{ $('Normalizar Dados').item.json.cpf_limpo }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4048,
+        1888
+      ],
+      "id": "b7b0b279-5380-42a5-bd1f-285aa3ea5605",
+      "name": "GravaAgendamentoPostgres",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "nome_medico": "Luis Fernando Pires D'Andrada",
+          "nome_convenio": "Sulamerica",
+          "especialidade": "Consulta Clínica Médica",
+          "horario": "17:40",
+          "data_atendimento": "29/04/2026",
+          "tipo_atendimento": "189",
+          "cpf_paciente": "19132969899",
+          "nome_paciente": "Renata de Souza Mendon...",
+          "data_nascimento": "01/01/1990",
+          "celular_paciente": "62999998888"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Dados": {
+      "main": [
+        [
+          {
+            "node": "obtem_id_parametros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtem_id_parametros": {
+      "main": [
+        [
+          {
+            "node": "Buscar Token iGUT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Token iGUT": {
+      "main": [
+        [
+          {
+            "node": "Garante Paciente no DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Garante Paciente no DB": {
+      "main": [
+        [
+          {
+            "node": "Buscar na API Externa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar na API Externa": {
+      "main": [
+        [
+          {
+            "node": "GravaAgendamentoPostgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1d91fcf0-7f56-42c8-a656-5dc3507344af",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "EgvLRy83WG3tdPLp",
+  "tags": []
+}

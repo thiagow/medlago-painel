@@ -1,0 +1,261 @@
+{
+  "name": "Tool - Cadastrar Paciente",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "nome"
+            },
+            {
+              "name": "cpf"
+            },
+            {
+              "name": "data_nascimento"
+            },
+            {
+              "name": "celular"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1088,
+        1536
+      ],
+      "id": "70e36280-e780-4aa0-ae05-90cf2618ddc8",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "norm-cpf",
+              "name": "cpf_limpo",
+              "value": "={{ $('When Executed by Another Workflow').item.json.cpf.replace(/[^0-9]/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "norm-data",
+              "name": "data_nascimento_formatada",
+              "value": "={{ (() => { const d = $('When Executed by Another Workflow').item.json.data_nascimento; if (!d) return null; if (d.includes('-') && d.indexOf('-') === 4) { const [y,m,dd] = d.split('-'); return `${dd}/${m}/${y}`; } return d; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "norm-nome",
+              "name": "nome",
+              "value": "={{ $('When Executed by Another Workflow').item.json.nome }}",
+              "type": "string"
+            },
+            {
+              "id": "norm-celular",
+              "name": "celular",
+              "value": "={{ $('When Executed by Another Workflow').item.json.celular.replace(/[^0-9]/g, '') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1312,
+        1536
+      ],
+      "id": "0efaa088-9fc7-410d-b9af-ba035c883d8c",
+      "name": "Normalizar Dados"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT token, expires_at \nFROM config_tokens \nWHERE service = 'igut_api' \n  AND expires_at > NOW()\nORDER BY updated_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        1536
+      ],
+      "id": "bde7b985-daa1-4f22-a19d-e1446c2086a3",
+      "name": "Buscar Token iGUT",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pacientes (nome, cpf, data_nascimento, telefone_principal, created_at, updated_at)\nVALUES (\n  '{{ $('Normalizar Dados').item.json.nome }}',\n  '{{ $('Normalizar Dados').item.json.cpf_limpo }}',\n  TO_DATE('{{ $('Normalizar Dados').item.json.data_nascimento_formatada }}', 'DD/MM/YYYY'),\n  '{{ $('Normalizar Dados').item.json.celular }}',\n  NOW(),\n  NOW()\n)\nON CONFLICT (cpf) DO UPDATE SET\n  nome = EXCLUDED.nome,\n  telefone_principal = EXCLUDED.telefone_principal,\n  updated_at = NOW()\nRETURNING cpf, nome, CASE WHEN xmax = 0 THEN 'cadastrado' ELSE 'atualizado' END as status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1760,
+        1536
+      ],
+      "id": "aeea34c0-adb6-4d3c-bf06-141b9ae365ee",
+      "name": "GravaPacientePostgres",
+      "credentials": {
+        "postgres": {
+          "id": "DHVsysbWnjZwX5BX",
+          "name": "Conexao Postgre - DbMedLago"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.igut.med.br/v2/pacientes/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client_token",
+              "value": "bWVkbGFnbw=="
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Buscar Token iGUT').item.json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"nome\": \"{{ $('Normalizar Dados').item.json.nome }}\",\n  \"cpf\": \"{{ $('Normalizar Dados').item.json.cpf_limpo }}\",\n  \"datadenascimento\": \"{{ $('Normalizar Dados').item.json.data_nascimento_formatada }}\",\n  \"celular\": \"{{ $('Normalizar Dados').item.json.celular }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "a0b30266-43a1-4a91-b092-68356eb32229",
+      "name": "Cadastrar na API iGUT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1968,
+        1536
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resp-cpf",
+              "name": "cpf",
+              "value": "={{ $('Normalizar Dados').item.json.cpf_limpo }}",
+              "type": "string"
+            },
+            {
+              "id": "resp-nome",
+              "name": "nome",
+              "value": "={{ $('Normalizar Dados').item.json.nome }}",
+              "type": "string"
+            },
+            {
+              "id": "resp-status",
+              "name": "status",
+              "value": "={{ $('GravaPacientePostgres').item.json.status ?? 'cadastrado' }}",
+              "type": "string"
+            },
+            {
+              "id": "resp-msg",
+              "name": "mensagem",
+              "value": "={{ $('GravaPacientePostgres').item.json.status === 'atualizado' ? 'CPF já existe — dados atualizados com sucesso.' : 'Paciente cadastrado com sucesso.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2192,
+        1536
+      ],
+      "id": "e1f156f6-ffb8-4679-a81d-0fcff5914a8f",
+      "name": "Montar Resposta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Dados": {
+      "main": [
+        [
+          {
+            "node": "Buscar Token iGUT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Token iGUT": {
+      "main": [
+        [
+          {
+            "node": "GravaPacientePostgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GravaPacientePostgres": {
+      "main": [
+        [
+          {
+            "node": "Cadastrar na API iGUT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadastrar na API iGUT": {
+      "main": [
+        [
+          {
+            "node": "Montar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4d0a975d-ca01-4d75-bc9a-705fa800c634",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33738330930e3881dd5571eca013f36ddf8aab20e4ea5c1f2ebaf4a2b4668ac6"
+  },
+  "id": "OGFo2N2azQbrX7Ud",
+  "tags": []
+}

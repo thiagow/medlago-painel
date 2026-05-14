@@ -1,0 +1,141 @@
+{
+  "project": "MedLago App",
+  "description": "SaaS panel for WhatsApp conversation management in clinics",
+  "version": "1.0",
+  "created": "2026-05-14",
+  "stack": {
+    "framework": "Next.js 16.1.6 (App Router)",
+    "language": "TypeScript 5",
+    "ui": "React 19 + Tailwind CSS 4 + Lucide React",
+    "database": "PostgreSQL + Prisma 6",
+    "auth": "JWT custom (jose) + HttpOnly cookies",
+    "storage": "Cloudflare R2 (S3-compatible)",
+    "messaging": "Evolution API (2 instances: bot + human)",
+    "deployment": "Netlify"
+  },
+  "documentation": {
+    "START_HERE": {
+      "path": "START_HERE.md",
+      "purpose": "Entry point - quick start for all roles",
+      "read_time_min": 3
+    },
+    "CLAUDE": {
+      "path": "CLAUDE.md",
+      "purpose": "Agent instructions - stack, architecture, patterns, conventions",
+      "read_time_min": 8,
+      "auto_loaded": true
+    },
+    "QUICK_REFERENCE": {
+      "path": "QUICK_REFERENCE.md",
+      "purpose": "Visual cheat sheet - structure, common tasks, TL;DR",
+      "read_time_min": 5
+    },
+    "DOCUMENTATION_MAP": {
+      "path": "DOCUMENTATION_MAP.md",
+      "purpose": "Complete index - what to read when, by theme",
+      "read_time_min": 7
+    },
+    "IMPLEMENTATION_SUMMARY": {
+      "path": "IMPLEMENTATION_SUMMARY.md",
+      "purpose": "Summary of what was created, impact analysis, maintenance guide",
+      "read_time_min": 5
+    },
+    "domain": {
+      "path": "docs/DOMAIN.md",
+      "purpose": "Glossary + business flows - read when working with business entities",
+      "read_time_min": 6,
+      "sections": ["Entidades Principais", "Glossário PT→EN", "Fluxos de Negócio", "Regras Críticas"]
+    },
+    "architecture": {
+      "path": "docs/ARCHITECTURE.md",
+      "purpose": "Design decisions with reasoning - read before proposing structural changes",
+      "read_time_min": 8,
+      "sections": ["JWT Custom", "No Service Layer", "React Context Only", "R2 Proxy", "SQL Manual"]
+    },
+    "docs_readme": {
+      "path": "docs/README.md",
+      "purpose": "Documentation index + guide on how to use docs",
+      "read_time_min": 4
+    }
+  },
+  "commands": {
+    "new_api_route": {
+      "path": ".claude/commands/new-api-route.md",
+      "purpose": "Template + checklist for creating new API route",
+      "read_time_min": 5,
+      "sections": ["Structure", "Security Checklist", "Performance Checklist", "Types", "Validation", "Patterns"]
+    },
+    "new_page": {
+      "path": ".claude/commands/new-page.md",
+      "purpose": "Template + checklist for creating new dashboard page",
+      "read_time_min": 7,
+      "sections": ["Structure", "With Form", "Security Checklist", "UX Checklist", "Performance Checklist"]
+    },
+    "db_migration": {
+      "path": ".claude/commands/db-migration.md",
+      "purpose": "Step-by-step procedure for database schema changes",
+      "read_time_min": 5,
+      "sections": ["Edit Schema", "Generate SQL", "Register", "Seed", "Common Cases", "Rollback"]
+    }
+  },
+  "memory": {
+    "project_overview": {
+      "path": ".claude/projects/c--Projetos-MedLago-medlago-app/memory/project_medlago.md",
+      "purpose": "Project context cached for next sessions",
+      "auto_loaded": true
+    },
+    "feedback_conventions": {
+      "path": ".claude/projects/c--Projetos-MedLago-medlago-app/memory/feedback_conventions.md",
+      "purpose": "Intentional conventions - prevent agent from 'fixing' them",
+      "auto_loaded": true,
+      "topics": ["JWT Custom", "No Service Layer", "State Local", "SQL Manual", "Soft Delete", "2 WhatsApp Instances", "R2 Proxy", "Middleware RBAC"]
+    }
+  },
+  "reading_paths": {
+    "first_time_agent": ["CLAUDE.md", "QUICK_REFERENCE.md", "DOCUMENTATION_MAP.md"],
+    "first_time_dev": ["START_HERE.md", "CLAUDE.md", "QUICK_REFERENCE.md", "docs/README.md"],
+    "create_api": [".claude/commands/new-api-route.md", "CLAUDE.md"],
+    "create_page": [".claude/commands/new-page.md", "CLAUDE.md"],
+    "create_migration": [".claude/commands/db-migration.md", "docs/DOMAIN.md"],
+    "work_with_business": ["docs/DOMAIN.md", "CLAUDE.md"],
+    "propose_change": ["docs/ARCHITECTURE.md", "CLAUDE.md"],
+    "lost_start_here": ["QUICK_REFERENCE.md", "START_HERE.md"]
+  },
+  "conventions": {
+    "language": "Portuguese (PT-BR) for domain names",
+    "ids": "UUID v4",
+    "soft_delete": "deleted_at DateTime? field",
+    "timestamps": "created_at, updated_at",
+    "naming": "agendamento, paciente, profissional, convenio, atendente",
+    "no_redux": true,
+    "no_service_layer": true,
+    "no_nextauth": true,
+    "auth": "JWT custom (jose) + HttpOnly",
+    "db_migrations": "SQL manual in prisma/migrations/"
+  },
+  "security_rules": {
+    "passwords": "bcryptjs 12 rounds",
+    "tokens": "HttpOnly cookies (never localStorage)",
+    "rbac": "Middleware validates + route handler validates",
+    "sql": "Prisma (parametrized), never raw queries",
+    "cors": "Whitelist, never permissive",
+    "pii": "Never log, generic errors",
+    "r2": "Presigned URLs (TTL 2h max)",
+    "motivo_required": "agendamento cancelado/pendente_confirmacao"
+  },
+  "do_not_do": [
+    "Introduce Redux/Zustand",
+    "Create service layer",
+    "Use 'prisma migrate dev' auto-generate",
+    "Use NextAuth",
+    "Expose R2 bucket publicly",
+    "Trust client headers for auth",
+    "Use hard delete (always soft delete)"
+  ],
+  "impact": {
+    "token_savings_percent": "30-40",
+    "consistency": "100%",
+    "velocity_increase_percent": "25",
+    "onboarding_time_reduction_percent": "70"
+  }
+}
