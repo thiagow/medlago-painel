@@ -203,7 +203,7 @@ export default function DashboardPage() {
     const statusCards = [
         {
             label: "Atendimentos IA",
-            sublabel: "Em aberto",
+            sublabel: "Com atividade no período",
             value: bs.ai,
             icon: Bot,
             gradient: "from-blue-500 to-cyan-400",
@@ -253,7 +253,7 @@ export default function DashboardPage() {
         },
         {
             label: "Total Registrado",
-            sublabel: "Todos os atendimentos",
+            sublabel: "Iniciados no período",
             value: bs.total,
             icon: MessageSquare,
             gradient: "from-slate-400 to-slate-300",
@@ -470,22 +470,25 @@ export default function DashboardPage() {
                     <StatusDonut data={donutData} />
 
                     <div className="mt-5 space-y-2">
-                        {donutLegend.map((item) => (
-                            <div key={item.label} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                                    <span className="text-xs text-slate-400">{item.label}</span>
+                        {(() => {
+                            const donutTotal = bs.ai + bs.waiting + bs.human + bs.finished;
+                            return donutLegend.map((item) => (
+                                <div key={item.label} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                                        <span className="text-xs text-slate-400">{item.label}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-semibold text-white">{item.value}</span>
+                                        {donutTotal > 0 && (
+                                            <span className="text-[10px] text-slate-600">
+                                                {((item.value / donutTotal) * 100).toFixed(0)}%
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-semibold text-white">{item.value}</span>
-                                    {bs.total > 0 && (
-                                        <span className="text-[10px] text-slate-600">
-                                            {((item.value / bs.total) * 100).toFixed(0)}%
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            ));
+                        })()}
                     </div>
                 </div>
 

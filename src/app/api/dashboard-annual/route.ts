@@ -69,7 +69,13 @@ export async function GET() {
             FROM chats c
             INNER JOIN users u ON c.assigned_to = u.id
             WHERE (
-                (c.finished IS NULL OR c.finished = false)
+                (
+                    (c.finished IS NULL OR c.finished = false)
+                    AND (
+                        (c.created_at >= $1 AND c.created_at <= $2)
+                        OR (c.updated_at >= $1 AND c.updated_at <= $2)
+                    )
+                )
                 OR (c.finished = true AND c.updated_at >= $1 AND c.updated_at <= $2)
             )
             GROUP BY u.id, u.name
@@ -77,7 +83,7 @@ export async function GET() {
             LIMIT 10
         `;
 
-        // ── 5. Por departamento ───────────────────────────────────────────────
+        // ── 5. Por departamento (mesma lógica de período) ─────────────────────
         const deptQuery = `
             SELECT
                 d.id::text AS dept_id,
@@ -86,7 +92,13 @@ export async function GET() {
             FROM chats c
             INNER JOIN departments d ON c.department_id = d.id
             WHERE (
-                (c.finished IS NULL OR c.finished = false)
+                (
+                    (c.finished IS NULL OR c.finished = false)
+                    AND (
+                        (c.created_at >= $1 AND c.created_at <= $2)
+                        OR (c.updated_at >= $1 AND c.updated_at <= $2)
+                    )
+                )
                 OR (c.finished = true AND c.updated_at >= $1 AND c.updated_at <= $2)
             )
             GROUP BY d.id, d.name
