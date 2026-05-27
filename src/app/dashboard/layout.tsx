@@ -26,6 +26,7 @@ import {
     TrendingUp,
     Eraser,
     FileSearch,
+    LifeBuoy,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -125,6 +126,12 @@ export default function DashboardLayout({
                 },
             ]
             : []),
+        {
+            href: "/dashboard/suporte",
+            icon: LifeBuoy,
+            label: "Suporte",
+            id: "nav-suporte",
+        },
     ];
 
     const settingsItems = [
