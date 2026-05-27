@@ -136,6 +136,13 @@ export default function SuporteDetalhe({ params }: { params: Promise<{ id: strin
 
     useEffect(() => { fetchTicket(); }, [fetchTicket]);
 
+    // Polling de 90s para não-admin verem respostas e mudanças de status em tempo quase-real
+    useEffect(() => {
+        if (admin) return;
+        const interval = setInterval(() => { fetchTicket(); }, 90_000);
+        return () => clearInterval(interval);
+    }, [admin, fetchTicket]);
+
     const handleStatusUpdate = async () => {
         if (!novoStatus || novoStatus === ticket?.status) return;
         setUpdatingStatus(true);

@@ -1,222 +1,212 @@
 # Dashboard — Guia de Métricas
 
-> **Documento de referência** para entender o que cada indicador do Painel de Controle mede, como é calculado e como interpretar os valores.
+> Documento de referência para entender o que cada indicador do Painel de Controle mede, como é calculado e como interpretar os valores.
 
 ---
 
-## Visão Geral
+## Princípio: universo único
 
-O Dashboard está organizado em **3 abas de período**:
+Todas as métricas do dashboard operam sobre o mesmo universo:
+
+> **Chats com `created_at` dentro do período selecionado.**
+
+Isso significa que **"Iniciados pela IA" é o total** sobre o qual todas as outras métricas se referem. Não há mais ambiguidade entre "atividade no período" e "criados no período" — é sempre o mesmo conjunto.
+
+> **Nota sobre o futuro:** hoje todo chat é iniciado pela IA. Quando vier a funcionalidade de "atendente inicia chat", basta filtrar por um campo `initiator = 'ai'` para manter a semântica.
+
+---
+
+## Visão Geral das Abas
 
 | Aba | Período coberto | Filtro adicional |
 |---|---|---|
 | **Hoje** | Das 00:00 às 23:59 do dia atual | — |
-| **Mensal** | Do dia 1 ao último dia do mês selecionado | Selector de mês (meses anteriores ao atual) |
-| **Anual** | De 1º de janeiro a 31 de dezembro do ano atual | — |
+| **Mensal** | Do dia 1 ao último dia do mês selecionado | Selector de mês |
+| **Anual** | De 1º de janeiro até **ontem 23:59 (D-1)** | — |
 
-Todas as métricas se ajustam automaticamente ao período da aba ativa.
+A aba Anual usa **D-1 (fechamento até ontem)** para garantir dados estáveis — não muda durante o dia.
 
 ---
 
-## Cards de Status (6 indicadores)
+## Cards de Gestão
 
-### 1. Atendimentos IA
-> **"Com atividade no período"**
+### Aba Hoje — 6 cards
 
-**O que mede:** Quantidade de conversas que estão **em andamento pela IA** e tiveram alguma atividade (criação ou atualização de registro) dentro do período selecionado.
+#### 1. Iniciados pela IA
+> *"Atendimentos no período"*
 
-**Como é calculado:**
+**O que mede:** Total de chats criados no período. É o universo.
+
 ```sql
-WHERE finished IS NULL OR finished = false        -- chat ainda não finalizado
-  AND status NOT IN ('finished', 'transferred_external')
-  AND ai_service NOT IN ('waiting', 'paused')     -- IA está ativa (não pausada)
-  AND (created_at OU updated_at dentro do período)
+WHERE created_at >= $1 AND created_at <= $2
 ```
 
-**Observação importante:** Inclui tanto chats **abertos hoje** quanto chats **abertos em dias anteriores** que receberam uma mensagem ou atualização dentro do período. Por isso, pode ser maior que o "Total Registrado" em dias com muito reengajamento de conversas antigas.
-
 ---
 
-### 2. Aguardando
-> **"Fila da equipe"**
+#### 2. Atendidos só pela IA
+> *"Sem transferência para equipe"*
 
-**O que mede:** Conversas em que a IA identificou necessidade de atendimento humano e estão **aguardando que um atendente assuma**, com atividade no período.
+**O que mede:** Chats que ficaram **inteiramente com a IA** e não precisaram ser transferidos para um atendente humano — incluindo finalizados e em andamento. **Não inclui** chats que estão aguardando na fila (esses entram na métrica "Aguardando").
 
-**Como é calculado:**
 ```sql
-WHERE finished IS NULL OR finished = false
-  AND (status = 'waiting' OU ai_service = 'waiting')
-  AND (created_at OU updated_at dentro do período)
+WHERE created_at no período
+  AND assigned_to IS NULL
+  AND NOT (status = 'waiting' OR ai_service = 'waiting')
 ```
 
-**Leitura prática:** Esse número representa a fila de espera. Um valor alto indica gargalo no atendimento humano.
-
 ---
 
-### 3. Atendimento Equipe
-> **"Agentes operando"**
+#### 3. Transferidos para Equipe
+> *"Com atendente atribuído"*
 
-**O que mede:** Conversas que estão **sendo atendidas ativamente por um agente humano** no momento, com atividade no período.
+**O que mede:** Chats que tiveram um atendente humano atribuído (independente de já estarem finalizados ou ainda em andamento).
 
-**Como é calculado:**
 ```sql
-WHERE finished IS NULL OR finished = false
-  AND (status = 'human' OU ai_service = 'paused')
-  AND (created_at OU updated_at dentro do período)
+WHERE created_at no período
+  AND assigned_to IS NOT NULL
 ```
 
-**Leitura prática:** Reflete a carga operacional atual da equipe de atendimento.
+> Observação: chats que estão apenas na fila aguardando (sem atendente atribuído) **não contam** aqui.
 
 ---
 
-### 4. Finalizados
-> **"Concluídos no período"**
+#### 4. Finalizados
+> *"Concluídos no período"*
 
-**O que mede:** Conversas que foram **marcadas como concluídas** (campo `finished = true`) dentro do período selecionado.
+**O que mede:** Total de chats encerrados (`finished = true`). Inclui tanto resolvidos pela IA quanto finalizados pela equipe.
 
-**Como é calculado:**
 ```sql
-WHERE finished = true
-  AND updated_at dentro do período
+WHERE created_at no período
+  AND finished = true
 ```
 
-**Observação:** O filtro usa `updated_at` (data da última atualização), que é quando o chat foi efetivamente finalizado. Isso significa que **um chat iniciado ontem e finalizado hoje** conta como finalizado hoje — comportamento intencional para medir a produtividade do dia.
+> Card (3) e card (4) podem se sobrepor: um chat transferido E finalizado aparece nos dois. São dimensões diferentes da jornada.
 
 ---
 
-### 5. Total Equipe
-> **"Passaram pela equipe"**
+#### 5. Aguardando agora *(somente Hoje)*
+> *"Fila da equipe (tempo real)"*
 
-**O que mede:** Total de conversas que tiveram **algum contato humano** (foram atribuídas a um atendente ou finalizadas por um humano) e tiveram atividade no período.
+**O que mede:** Snapshot do momento — chats que estão **agora** aguardando atendente. **Sem filtro de data.**
 
-**Como é calculado:**
 ```sql
-WHERE (assigned_to IS NOT NULL OR finished_by IS NOT NULL)
-  AND (created_at OU updated_at dentro do período)
+WHERE (finished IS NULL OR finished = false)
+  AND (status = 'waiting' OR ai_service = 'waiting')
 ```
 
-**Diferença em relação a "Atendimento Equipe":** "Atendimento Equipe" é o snapshot atual (em andamento agora). "Total Equipe" é o acumulado do período (todos que passaram, incluindo já finalizados).
-
 ---
 
-### 6. Total Registrado
-> **"Iniciados no período"**
+#### 6. Sendo atendidos agora *(somente Hoje)*
+> *"Equipe operando (tempo real)"*
 
-**O que mede:** Quantidade de conversas **criadas** (primeiro contato) dentro do período selecionado.
+**O que mede:** Snapshot — chats que estão **agora** sendo atendidos por humanos. **Sem filtro de data.**
 
-**Como é calculado:**
 ```sql
-WHERE created_at dentro do período
+WHERE (finished IS NULL OR finished = false)
+  AND (status = 'human' OR ai_service = 'paused')
 ```
 
-**Leitura prática:** É o volume de entrada — quantos pacientes/contatos iniciaram uma nova conversa naquele período. É a métrica base de demanda.
-
 ---
 
-## Por que "Total Registrado" pode ser menor que a soma dos outros cards?
+### Abas Mensal e Anual — 4 cards
 
-Essa é a dúvida mais comum. A explicação:
-
-| Card | Filtro base |
-|---|---|
-| IA + Aguardando + Equipe + Finalizados | Atividade no período (`created_at` **OU** `updated_at`) |
-| **Total Registrado** | Criados no período (`created_at` apenas) |
-
-**Exemplo:** Em um dia com 8 novos chats (Total = 8), podem ter chegado mensagens em 4 chats antigos (de dias anteriores), totalizando 12 ativos com atividade hoje. O resultado aparente seria `IA=12, Total=8` — não é um erro, são medidas diferentes.
+Mostram apenas os cards **1, 2, 3 e 4**. Os snapshots (5 e 6) são estado real-time e não fazem sentido para períodos passados.
 
 ---
 
 ## Gráfico de Distribuição (Donut)
 
-**O que mostra:** Proporção visual entre os 4 status ativos no período: IA, Aguardando, Equipe e Finalizados.
+**O que mostra:** Como os chats iniciados no período se distribuem entre três categorias **mutuamente exclusivas** que representam o funil do atendimento.
 
-**Como os percentuais são calculados:**
+| Fatia | Filtro | Cor |
+|---|---|---|
+| **Atendidos só pela IA** | `assigned_to IS NULL` E não está aguardando | Verde |
+| **Aguardando** | `assigned_to IS NULL` E `status='waiting' OR ai_service='waiting'` | Laranja |
+| **Atendidos pela Equipe** | `assigned_to IS NOT NULL` | Violeta |
+
+**Garantia matemática:**
+
 ```
-% de cada status = valor do status ÷ (IA + Aguardando + Equipe + Finalizados) × 100
+Atendidos só pela IA + Aguardando + Atendidos pela Equipe = Iniciados pela IA
 ```
 
-O número no centro do donut é a **soma total dos 4 valores**. Os percentuais sempre somam 100%.
-
-> **Nota:** O denominador é a soma dos 4 valores exibidos — e não o "Total Registrado" — para garantir que os percentuais sejam sempre coerentes.
+Isso significa:
+- O número central do Donut é **exatamente** o card "Iniciados pela IA"
+- Os percentuais sempre somam 100%
+- Cada fatia bate diretamente com seu card correspondente
 
 ---
 
 ## Por Atendente
 
-**O que mostra:** Ranking dos atendentes por volume de conversas que tiveram **atividade no período** e estavam ou estão sob responsabilidade deles.
-
-**Como é calculado:** Para cada atendente com chats vinculados (`assigned_to`):
+**O que mostra:** Ranking dos atendentes pelos chats que receberam **e foram iniciados no período**.
 
 ```sql
-WHERE (
-    -- Chats ativos com atividade no período
-    (finished IS NULL OR finished = false)
-    AND (created_at OU updated_at dentro do período)
-)
-OR (
-    -- Chats finalizados no período
-    finished = true AND updated_at dentro do período
-)
+WHERE c.created_at >= $1 AND c.created_at <= $2
+  AND c.assigned_to = u.id
 ```
 
 **Colunas exibidas:**
+
 | Coluna | Descrição |
 |---|---|
-| Total (número grande) | Soma de ativos + finalizados no período |
-| `X fin.` | Quantos ele finalizou no período |
+| Total | Chats iniciados no período que foram atribuídos ao atendente |
+| `X fin.` | Quantos desses ele finalizou |
 | `X transf.` | Quantos foram transferidos externamente |
 
-**Por que o total de um atendente pode não bater com o total geral?** Porque um mesmo chat pode ter passado por mais de um atendente (reatribuições), sendo contado para cada um. O total geral é de chats únicos; o ranking é por atribuição.
+**Coerência:** A soma dos totais por atendente ≤ card "Transferidos para Equipe". Pode ser menor se um chat foi reatribuído (cada atribuição conta uma vez).
 
 ---
 
 ## Por Departamento
 
-**O que mostra:** Distribuição de conversas por departamento, com a mesma lógica de período aplicada ao "Por Atendente".
+**O que mostra:** Distribuição de chats iniciados no período por departamento.
 
-**Como é calculado:**
 ```sql
--- Mesmo critério de período do "Por Atendente"
--- Agrupa por department_id (via JOIN departments)
+WHERE c.created_at >= $1 AND c.created_at <= $2
+  AND c.department_id = d.id
 ```
 
-**Observação:** Chats sem departamento atribuído não aparecem neste painel.
+Chats sem departamento atribuído não aparecem.
 
 ---
 
 ## Top Tags do Período
 
-**O que mostra:** As 5 tags mais utilizadas para categorizar conversas dentro do período.
+**O que mostra:** As 5 tags mais aplicadas dentro do período.
 
-**Como é calculado:**
 ```sql
-WHERE chat_tags.created_at dentro do período
+WHERE chat_tags.created_at no período
 GROUP BY tag
 ORDER BY COUNT DESC
 LIMIT 5
 ```
 
-**Diferença de período:** O filtro usa `chat_tags.created_at` — a data em que a tag foi aplicada à conversa, não a data de criação do chat. Uma tag aplicada hoje em um chat antigo conta para o período atual.
+> O filtro usa `chat_tags.created_at` — a data em que a tag foi aplicada — não a data de criação do chat. Uma tag aplicada hoje em um chat antigo conta para o período atual.
 
 ---
 
 ## Status do Sistema
 
-Indicador fixo que sinaliza se a **instância WhatsApp** (Evolution API) está conectada e operacional. Não é calculado a partir do banco de dados — é um status estático na UI atual.
+Indicador fixo que sinaliza se a **instância WhatsApp** (Evolution API) está conectada. Não vem do banco — é um status estático na UI atual.
 
 ---
 
-## Resumo dos Filtros por Métrica
+## Resumo: filtros por métrica
 
-| Métrica | Filtro de data | Campo usado |
+| Métrica | Universo | Filtro adicional |
 |---|---|---|
-| IA / Aguardando / Equipe (cards) | `created_at` OU `updated_at` no período | Chats ativos |
-| Finalizados | `updated_at` no período | `finished = true` |
-| Total Registrado | `created_at` no período | Todos os chats |
-| Total Equipe | `created_at` OU `updated_at` no período | Com `assigned_to` ou `finished_by` |
-| Por Atendente | `created_at` OU `updated_at` no período | Ativos + finalizados no período |
-| Por Departamento | `created_at` OU `updated_at` no período | Ativos + finalizados no período |
-| Top Tags | `created_at` no período | `chat_tags.created_at` |
+| Iniciados pela IA | `created_at` no período | — |
+| Atendidos só pela IA | `created_at` no período | `assigned_to IS NULL` E não está aguardando |
+| Aguardando (donut) | `created_at` no período | `assigned_to IS NULL` E `status='waiting' OR ai_service='waiting'` |
+| Transferidos p/ Equipe | `created_at` no período | `assigned_to IS NOT NULL` |
+| Finalizados | `created_at` no período | `finished = true` |
+| Aguardando agora | snapshot | `status='waiting' OR ai_service='waiting'` (sem data) |
+| Sendo atendidos agora | snapshot | `status='human' OR ai_service='paused'` (sem data) |
+| Donut: 3 fatias | `created_at` no período | filtros mutuamente exclusivos (resolvido / transferido / aberto) |
+| Por Atendente | `created_at` no período | `assigned_to = user_id` |
+| Por Departamento | `created_at` no período | `department_id = dept_id` |
+| Top Tags | `chat_tags.created_at` no período | — |
 
 ---
 
@@ -232,4 +222,4 @@ Indicador fixo que sinaliza se a **instância WhatsApp** (Evolution API) está c
 
 ---
 
-*Última atualização: maio de 2026 — reflete as queries de `dashboard-today`, `dashboard-month` e `dashboard-annual` após correção das divergências de período.*
+*Última atualização: maio de 2026 — modelo de universo único com cards mutuamente exclusivos.*

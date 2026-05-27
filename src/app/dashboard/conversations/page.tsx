@@ -36,7 +36,8 @@ import {
     History,
     Save,
     ChevronDown,
-    Trash2
+    Trash2,
+    Building2
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -57,6 +58,7 @@ interface Chat {
     last_message_at: string | null;
     assigned_to: string | null;
     assigned_user_name: string | null;
+    department_id: string | null;
     department_name: string | null;
     finished: boolean | null;
     status?: string | null;
@@ -135,6 +137,9 @@ function ConversationsContent() {
     const [transferring, setTransferring] = useState(false);
     const [reactivating, setReactivating] = useState(false);
     const [assuming, setAssuming] = useState(false);
+    const [myDepts, setMyDepts] = useState<{ id: string; name: string }[]>([]);
+    const [showDeptModal, setShowDeptModal] = useState(false);
+    const [selectedDeptForAssume, setSelectedDeptForAssume] = useState<string | null>(null);
     const [finishing, setFinishing] = useState(false);
     const [showConfirm, setShowConfirm] = useState<"transfer" | "reactivate" | "finish" | null>(null);
     const [showTagModal, setShowTagModal] = useState(false);
@@ -423,6 +428,14 @@ function ConversationsContent() {
         userRef.current = user;
     }, [user]);
 
+    // Carrega departamentos vinculados ao atendente (decide se abre modal ao assumir chat)
+    useEffect(() => {
+        fetch("/api/users/me/departments", { cache: "no-store" })
+            .then(r => (r.ok ? r.json() : { departments: [] }))
+            .then(d => setMyDepts(d.departments ?? []))
+            .catch(() => setMyDepts([]));
+    }, []);
+
     // Polling a cada 10 segundos para contagem de chats em espera
     const fetchWaitingCount = useCallback(async () => {
         try {
@@ -695,29 +708,54 @@ function ConversationsContent() {
         }
     };
 
-    const handleAssume = async () => {
+    const executeAssume = useCallback(async (departmentId?: string) => {
         if (!selectedChat) return;
         setAssuming(true);
         try {
-            const res = await fetch(`/api/chats/${selectedChat.id}/assume`, { method: "POST" });
-            if (!res.ok) throw new Error();
+            const res = await fetch(`/api/chats/${selectedChat.id}/assume`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(departmentId ? { department_id: departmentId } : {}),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error ?? "Erro ao assumir atendimento");
+            }
             const data = await res.json();
             toast.success("Atendimento assumido com sucesso!");
-            // Atualizar o chat selecionado com os dados retornados pela API (agora ai_service="paused")
             const updatedChat: Chat = {
                 ...selectedChat,
                 ai_service: "paused",
                 assigned_to: data.chat?.assigned_to ?? selectedChat.assigned_to,
                 assigned_user_name: data.chat?.assigned_user_name ?? selectedChat.assigned_user_name,
+                department_id: data.chat?.department_id ?? selectedChat.department_id,
             };
             setSelectedChat(updatedChat);
-            // Mudar para aba "human" — o useEffect de [tab] vai recarregar a lista
             setTab("human");
-        } catch {
-            toast.error("Erro ao assumir atendimento");
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Erro ao assumir atendimento");
         } finally {
             setAssuming(false);
+            setSelectedDeptForAssume(null);
         }
+    }, [selectedChat]);
+
+    const handleAssume = () => {
+        if (!selectedChat) return;
+        // Se chat já tem depto OU usuário tem 0/1 depto → assume direto (backend resolve)
+        if (selectedChat.department_id || myDepts.length <= 1) {
+            executeAssume();
+            return;
+        }
+        // Múltiplos depts: abre modal para usuário escolher qual representará
+        setSelectedDeptForAssume(null);
+        setShowDeptModal(true);
+    };
+
+    const confirmAssumeWithDept = async () => {
+        if (!selectedDeptForAssume) return;
+        setShowDeptModal(false);
+        await executeAssume(selectedDeptForAssume);
     };
 
     const handleApplyTag = async (tagId: string) => {
@@ -1117,6 +1155,60 @@ function ConversationsContent() {
                                     }`}
                             >
                                 {showConfirm === "transfer" ? (transferring ? "Enviando..." : "Confirmar") : showConfirm === "finish" ? (finishing ? "Finalizando..." : "Confirmar") : (reactivating ? "Reativando..." : "Confirmar")}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de escolha de departamento ao assumir (atendente em múltiplos depts) */}
+            {showDeptModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                                <Building2 className="w-5 h-5 text-blue-400" />
+                                Escolha o departamento
+                            </h3>
+                            <button
+                                onClick={() => { setShowDeptModal(false); setSelectedDeptForAssume(null); }}
+                                className="text-slate-400 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <p className="text-slate-400 text-sm mb-5">
+                            Em qual departamento você está atendendo este chamado?
+                        </p>
+                        <div className="space-y-2 mb-6 max-h-72 overflow-y-auto">
+                            {myDepts.map(d => (
+                                <button
+                                    key={d.id}
+                                    onClick={() => setSelectedDeptForAssume(d.id)}
+                                    className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                                        selectedDeptForAssume === d.id
+                                            ? "bg-blue-600/20 border-blue-500 text-white"
+                                            : "bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700/50"
+                                    }`}
+                                >
+                                    {d.name}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => { setShowDeptModal(false); setSelectedDeptForAssume(null); }}
+                                className="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-700 text-sm transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmAssumeWithDept}
+                                disabled={!selectedDeptForAssume || assuming}
+                                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {assuming && <Loader2 className="w-4 h-4 animate-spin" />}
+                                {assuming ? "Assumindo..." : "Confirmar"}
                             </button>
                         </div>
                     </div>

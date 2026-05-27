@@ -4,85 +4,74 @@ import { prisma } from "@/lib/prisma";
 /**
  * GET /api/dashboard-today
  *
- * Retorna métricas do dashboard separando:
- * - Ativos agora (sem filtro de data): ai, waiting, human
- * - Concluídos hoje: finished, transferred_external
- * - Iniciados hoje: total criado no dia
- * - Por atendente (chats ativos ou finalizados hoje)
- * - Por departamento (chats ativos ou finalizados hoje)
+ * Modelo único: universo = chats com `created_at` no período selecionado.
+ *
+ * Retorna:
+ * - started:             total iniciados pela IA (created_at no período)
+ * - resolved_by_ai:      finalizados sem passar por atendente
+ * - transferred_to_team: com atendente atribuído (assigned_to NOT NULL)
+ * - finished:            total finalizados
+ * - waiting_now:         snapshot — chats aguardando agora (sem filtro de data)
+ * - with_team_now:       snapshot — chats sendo atendidos agora (sem filtro de data)
+ * - donut.{resolved_by_ai, attended_by_team, open_with_ai}: 3 fatias mutuamente exclusivas
+ *   cuja soma = started.
+ * - by_agent / by_department: chats iniciados no período E atribuídos ao atendente/depto.
+ * - by_tag: tags aplicadas no período.
  */
 export async function GET() {
     try {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        // ── 1. Estado atual dos chats ativos (Com filtro de data de hoje) ─────────────
-        const activeStatusQuery = `
+        // ── Contagens sobre chats iniciados no período + Donut em uma única query ──
+        const periodCountsQuery = `
             SELECT
-                COALESCE(
-                    c.status,
-                    CASE
-                        WHEN c.ai_service = 'waiting' THEN 'waiting'
-                        WHEN c.ai_service = 'paused'  THEN 'human'
-                        ELSE 'ai'
-                    END
-                ) AS status,
-                COUNT(*)::int AS total
-            FROM chats c
-            WHERE (c.finished IS NULL OR c.finished = false)
-              AND COALESCE(c.status, '') NOT IN ('finished', 'transferred_external')
-              AND ((c.created_at >= $1 AND c.created_at <= $2) OR (c.updated_at >= $1 AND c.updated_at <= $2))
-            GROUP BY 1
-        `;
-
-        // ── 2. Concluídos HOJE (filtro por updated_at) ────────────────────────
-        const finishedTodayQuery = `
-            SELECT
-                COALESCE(c.status, 'finished') AS status,
-                COUNT(*)::int AS total
-            FROM chats c
-            WHERE c.finished = true
-              AND c.updated_at >= $1
-              AND c.updated_at <= $2
-            GROUP BY 1
-        `;
-
-        // ── 3. Total iniciados hoje ───────────────────────────────────────────
-        const startedTodayQuery = `
-            SELECT COUNT(*)::int AS total
+                COUNT(*)::int AS started,
+                COUNT(CASE WHEN c.assigned_to IS NULL
+                            AND NOT (c.status = 'waiting' OR c.ai_service = 'waiting')
+                          THEN 1 END)::int AS served_by_ai_only,
+                COUNT(CASE WHEN c.assigned_to IS NULL
+                            AND (c.status = 'waiting' OR c.ai_service = 'waiting')
+                          THEN 1 END)::int AS waiting_in_period,
+                COUNT(CASE WHEN c.assigned_to IS NOT NULL THEN 1 END)::int AS transferred_to_team,
+                COUNT(CASE WHEN c.finished = true THEN 1 END)::int AS finished
             FROM chats c
             WHERE c.created_at >= $1 AND c.created_at <= $2
         `;
 
-        // ── 4. Por atendente (ativos com atividade no período + finalizados no período) ──
+        // ── Snapshots (sem filtro de data) ────────────────────────────────────
+        const waitingNowQuery = `
+            SELECT COUNT(*)::int AS total
+            FROM chats c
+            WHERE (c.finished IS NULL OR c.finished = false)
+              AND (c.status = 'waiting' OR c.ai_service = 'waiting')
+        `;
+
+        const withTeamNowQuery = `
+            SELECT COUNT(*)::int AS total
+            FROM chats c
+            WHERE (c.finished IS NULL OR c.finished = false)
+              AND (c.status = 'human' OR c.ai_service = 'paused')
+        `;
+
+        // ── Por atendente — chats iniciados no período E atribuídos ao atendente ──
         const agentQuery = `
             SELECT
                 u.id::text AS user_id,
                 u.name     AS user_name,
                 COUNT(DISTINCT c.id)::int AS total,
-                COUNT(DISTINCT CASE
-                    WHEN c.status = 'finished' OR (c.finished = true AND COALESCE(c.status,'') != 'transferred_external')
-                    THEN c.id END)::int AS finished_count,
+                COUNT(DISTINCT CASE WHEN c.finished = true THEN c.id END)::int AS finished_count,
                 COUNT(DISTINCT CASE WHEN c.status = 'transferred_external' THEN c.id END)::int AS transferred_count
             FROM chats c
             INNER JOIN users u ON c.assigned_to = u.id
-            WHERE (
-                (
-                    (c.finished IS NULL OR c.finished = false)
-                    AND (
-                        (c.created_at >= $1 AND c.created_at <= $2)
-                        OR (c.updated_at >= $1 AND c.updated_at <= $2)
-                    )
-                )
-                OR (c.finished = true AND c.updated_at >= $1 AND c.updated_at <= $2)
-            )
+            WHERE c.created_at >= $1 AND c.created_at <= $2
             GROUP BY u.id, u.name
             ORDER BY total DESC
             LIMIT 10
         `;
 
-        // ── 5. Por departamento (mesma lógica de período) ─────────────────────
+        // ── Por departamento — chats iniciados no período E com departamento ──
         const deptQuery = `
             SELECT
                 d.id::text AS dept_id,
@@ -90,22 +79,13 @@ export async function GET() {
                 COUNT(DISTINCT c.id)::int AS total
             FROM chats c
             INNER JOIN departments d ON c.department_id = d.id
-            WHERE (
-                (
-                    (c.finished IS NULL OR c.finished = false)
-                    AND (
-                        (c.created_at >= $1 AND c.created_at <= $2)
-                        OR (c.updated_at >= $1 AND c.updated_at <= $2)
-                    )
-                )
-                OR (c.finished = true AND c.updated_at >= $1 AND c.updated_at <= $2)
-            )
+            WHERE c.created_at >= $1 AND c.created_at <= $2
             GROUP BY d.id, d.name
             ORDER BY total DESC
             LIMIT 8
         `;
 
-        // ── 6. Top Tags do Dia ────────────────────────────────────────────────
+        // ── Top tags do período ───────────────────────────────────────────────
         const tagsQuery = `
             SELECT
                 t.id::text AS tag_id,
@@ -120,56 +100,33 @@ export async function GET() {
             LIMIT 5
         `;
 
-        // ── 7. Total Equipe (Passou por Atendentes) ───────────────────────────
-        const teamHandledQuery = `
-            SELECT COUNT(*)::int AS total
-            FROM chats c
-            WHERE (c.assigned_to IS NOT NULL OR c.finished_by IS NOT NULL)
-              AND (
-                  (c.created_at >= $1 AND c.created_at <= $2)
-                  OR (c.updated_at >= $1 AND c.updated_at <= $2)
-              )
-        `;
-
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const [activeRows, finishedRows, startedRows, agentRows, deptRows, tagRows, teamHandledRows] = await Promise.all([
-            prisma.$queryRawUnsafe<any[]>(activeStatusQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(finishedTodayQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(startedTodayQuery, todayStart, todayEnd),
+        const [periodRows, waitingRows, withTeamRows, agentRows, deptRows, tagRows] = await Promise.all([
+            prisma.$queryRawUnsafe<any[]>(periodCountsQuery, todayStart, todayEnd),
+            prisma.$queryRawUnsafe<any[]>(waitingNowQuery),
+            prisma.$queryRawUnsafe<any[]>(withTeamNowQuery),
             prisma.$queryRawUnsafe<any[]>(agentQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(deptQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(tagsQuery, todayStart, todayEnd),
-            prisma.$queryRawUnsafe<any[]>(teamHandledQuery, todayStart, todayEnd),
         ]);
 
-        // Montar by_status
-        const byStatus = {
-            ai: 0,
-            waiting: 0,
-            human: 0,
-            finished: 0,
-            team_handled: Number(teamHandledRows?.[0]?.total || 0),
-            total: Number(startedRows?.[0]?.total || 0),
-        };
-
-        // Preencher active
-        if (Array.isArray(activeRows)) {
-            for (const r of activeRows) {
-                if (r.status === "ai") byStatus.ai = Number(r.total);
-                if (r.status === "waiting") byStatus.waiting = Number(r.total);
-                if (r.status === "human") byStatus.human = Number(r.total);
-            }
-        }
-
-        // Preencher finished
-        if (Array.isArray(finishedRows)) {
-            for (const r of finishedRows) {
-                if (r.status === "finished") byStatus.finished += Number(r.total);
-            }
-        }
+        const p = periodRows?.[0] ?? {};
+        const started = Number(p.started || 0);
+        const served_by_ai_only = Number(p.served_by_ai_only || 0);
+        const waiting_in_period = Number(p.waiting_in_period || 0);
+        const transferred_to_team = Number(p.transferred_to_team || 0);
+        const finished = Number(p.finished || 0);
 
         return NextResponse.json({
-            by_status: byStatus,
+            by_status: {
+                started,
+                served_by_ai_only,
+                waiting_in_period,
+                transferred_to_team,
+                finished,
+                waiting_now: Number(waitingRows?.[0]?.total || 0),
+                with_team_now: Number(withTeamRows?.[0]?.total || 0),
+            },
             by_agent: Array.isArray(agentRows) ? agentRows.map(r => ({
                 id: String(r.user_id),
                 name: r.user_name,
@@ -190,7 +147,7 @@ export async function GET() {
             })) : [],
         });
     } catch (error) {
-        console.error("Erro ao buscar dados do dashboard:", error);
+        console.error("Erro ao buscar dados do dashboard hoje:", error);
         return NextResponse.json({ error: "Erro interno" }, { status: 500 });
     }
 }

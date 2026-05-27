@@ -2,11 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
-    Bot,
     UserCheck,
     CheckCircle2,
     Hourglass,
-    MessageSquare,
     Users,
     TrendingUp,
     Activity,
@@ -18,6 +16,9 @@ import {
     CalendarDays,
     Sun,
     ChevronDown,
+    Sparkles,
+    UsersRound,
+    PlayCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -26,12 +27,13 @@ import { ptBR } from "date-fns/locale";
 
 interface StatsResponse {
     by_status: {
-        ai: number;
-        waiting: number;
-        human: number;
+        started: number;
+        served_by_ai_only: number;
+        waiting_in_period: number;
+        transferred_to_team: number;
         finished: number;
-        team_handled: number;
-        total: number;
+        waiting_now?: number;     // apenas em /dashboard-today
+        with_team_now?: number;   // apenas em /dashboard-today
     };
     by_agent: { id: string; name: string; total: number; finished: number; transferred_external: number }[];
     by_department: { id: string; name: string; total: number }[];
@@ -43,13 +45,14 @@ type TabId = "hoje" | "mensal" | "anual";
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: number }) {
+    const safeValue = Number.isFinite(value) ? value : 0;
     const [display, setDisplay] = useState(0);
 
     useEffect(() => {
-        if (value === 0) { setDisplay(0); return; }
+        if (safeValue === 0) { setDisplay(0); return; }
         const start = Date.now();
-        const from = display;
-        const to = value;
+        const from = Number.isFinite(display) ? display : 0;
+        const to = safeValue;
         const step = () => {
             const elapsed = Date.now() - start;
             const progress = Math.min(elapsed / duration, 1);
@@ -59,7 +62,7 @@ function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: n
         };
         requestAnimationFrame(step);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [value]);
+    }, [safeValue]);
 
     return <>{display}</>;
 }
@@ -176,7 +179,15 @@ export default function DashboardPage() {
     }, [fetchStats, activeTab]);
 
     // ── Derived ────────────────────────────────────────────────────────────────
-    const bs = activeData?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, team_handled: 0, total: 0 };
+    const bs = activeData?.by_status ?? {
+        started: 0,
+        served_by_ai_only: 0,
+        waiting_in_period: 0,
+        transferred_to_team: 0,
+        finished: 0,
+        waiting_now: 0,
+        with_team_now: 0,
+    };
 
     // Label do período selecionado na aba Mensal
     const mensalLabel = useMemo(() => {
@@ -199,22 +210,60 @@ export default function DashboardPage() {
     const tagSectionLabel = { hoje: "Dia", mensal: "Mês", anual: "Ano" }[activeTab];
     const emptyPeriodLabel = { hoje: "hoje", mensal: "no mês", anual: "no ano" }[activeTab];
 
+    // Snapshots (Aguardando / Sendo Atendidos) apenas na aba Hoje
+    const showSnapshots = activeTab === "hoje";
+
     // ── Configuração dos cards de status ───────────────────────────────────────
     const statusCards = [
         {
-            label: "Atendimentos IA",
-            sublabel: "Com atividade no período",
-            value: bs.ai,
-            icon: Bot,
+            key: "started",
+            label: "Iniciados pela IA",
+            sublabel: "Atendimentos no período",
+            value: bs.started,
+            icon: PlayCircle,
             gradient: "from-blue-500 to-cyan-400",
             bg: "bg-blue-500/10",
             border: "border-blue-500/20",
             text: "text-blue-400",
         },
         {
-            label: "Aguardando",
-            sublabel: "Fila da equipe",
-            value: bs.waiting,
+            key: "served_by_ai_only",
+            label: "Atendidos só pela IA",
+            sublabel: "Sem transferência para equipe",
+            value: bs.served_by_ai_only,
+            icon: Sparkles,
+            gradient: "from-emerald-500 to-teal-400",
+            bg: "bg-emerald-500/10",
+            border: "border-emerald-500/20",
+            text: "text-emerald-400",
+        },
+        {
+            key: "transferred_to_team",
+            label: "Transferidos p/ Equipe",
+            sublabel: "Com atendente atribuído",
+            value: bs.transferred_to_team,
+            icon: UsersRound,
+            gradient: "from-violet-500 to-purple-400",
+            bg: "bg-violet-500/10",
+            border: "border-violet-500/20",
+            text: "text-violet-400",
+        },
+        {
+            key: "finished",
+            label: "Finalizados",
+            sublabel: "Concluídos no período",
+            value: bs.finished,
+            icon: CheckCircle2,
+            gradient: "from-green-500 to-lime-400",
+            bg: "bg-green-500/10",
+            border: "border-green-500/20",
+            text: "text-green-400",
+        },
+        {
+            key: "waiting_now",
+            label: "Aguardando agora",
+            sublabel: "Todos os dias · Tempo real",
+            value: bs.waiting_now ?? 0,
             icon: Hourglass,
             gradient: "from-orange-500 to-amber-400",
             bg: "bg-orange-500/10",
@@ -222,62 +271,40 @@ export default function DashboardPage() {
             text: "text-orange-400",
         },
         {
-            label: "Atendimento Equipe",
-            sublabel: "Agentes operando",
-            value: bs.human,
+            key: "with_team_now",
+            label: "Sendo atendidos agora",
+            sublabel: "Todos os dias · Tempo real",
+            value: bs.with_team_now ?? 0,
             icon: UserCheck,
             gradient: "from-amber-500 to-yellow-400",
             bg: "bg-amber-500/10",
             border: "border-amber-500/20",
             text: "text-amber-400",
         },
-        {
-            label: "Finalizados",
-            sublabel: "Concluídos no período",
-            value: bs.finished,
-            icon: CheckCircle2,
-            gradient: "from-emerald-500 to-green-400",
-            bg: "bg-emerald-500/10",
-            border: "border-emerald-500/20",
-            text: "text-emerald-400",
-        },
-        {
-            label: "Total Equipe",
-            sublabel: "Passaram pela equipe",
-            value: bs.team_handled,
-            icon: Users,
-            gradient: "from-violet-500 to-purple-400",
-            bg: "bg-violet-500/10",
-            border: "border-violet-500/20",
-            text: "text-violet-400",
-        },
-        {
-            label: "Total Registrado",
-            sublabel: "Iniciados no período",
-            value: bs.total,
-            icon: MessageSquare,
-            gradient: "from-slate-400 to-slate-300",
-            bg: "bg-slate-500/10",
-            border: "border-slate-500/20",
-            text: "text-slate-300",
-        },
     ];
+
+    const visibleCards = showSnapshots
+        ? statusCards
+        : statusCards.filter(c => c.key !== "waiting_now" && c.key !== "with_team_now");
+
+    const cardsGridClass = showSnapshots
+        ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3"
+        : "grid grid-cols-2 lg:grid-cols-4 gap-3";
 
     const maxAgentTotal = Math.max(...(activeData?.by_agent ?? []).map(a => a.total), 1);
     const maxDeptTotal  = Math.max(...(activeData?.by_department ?? []).map(d => d.total), 1);
     const maxTagTotal   = Math.max(...(activeData?.by_tag ?? []).map(t => t.total), 1);
 
+    // Donut — 3 fatias mutuamente exclusivas. Soma = bs.started
     const donutData = [
-        { label: "IA",         value: bs.ai,       color: "#3b82f6" },
-        { label: "Aguardando", value: bs.waiting,   color: "#f97316" },
-        { label: "Equipe",     value: bs.human,     color: "#f59e0b" },
-        { label: "Finalizados",value: bs.finished,  color: "#10b981" },
+        { label: "Atendidos só pela IA",  value: bs.served_by_ai_only,   color: "#10b981" },
+        { label: "Aguardando",            value: bs.waiting_in_period,   color: "#f97316" },
+        { label: "Atendidos pela Equipe", value: bs.transferred_to_team, color: "#8b5cf6" },
     ];
     const donutLegend = [
-        { label: "IA",         color: "bg-blue-500",    value: bs.ai },
-        { label: "Aguardando", color: "bg-orange-500",  value: bs.waiting },
-        { label: "Equipe",     color: "bg-amber-500",   value: bs.human },
-        { label: "Finalizados",color: "bg-emerald-500", value: bs.finished },
+        { label: "Atendidos só pela IA",  color: "bg-emerald-500", value: bs.served_by_ai_only },
+        { label: "Aguardando",            color: "bg-orange-500",  value: bs.waiting_in_period },
+        { label: "Atendidos pela Equipe", color: "bg-violet-500",  value: bs.transferred_to_team },
     ];
 
     // ── Tabs config ────────────────────────────────────────────────────────────
@@ -430,29 +457,100 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-bold text-white mb-4 pl-1 border-l-4 border-slate-700">
                     {cardGridTitle}
                 </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    {statusCards.map((card, i) => {
-                        const Icon = card.icon;
-                        return (
-                            <div
-                                key={i}
-                                className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
-                            >
-                                <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className={`p-2 rounded-lg ${card.bg}`}>
-                                        <Icon className={`w-4 h-4 ${card.text}`} />
-                                    </div>
-                                </div>
-                                <div className="text-3xl font-bold text-white mb-1">
-                                    <AnimatedNumber value={card.value} />
-                                </div>
-                                <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
-                                <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
+
+                {showSnapshots ? (
+                    <>
+                        {/* Seção 1: Atendimentos de hoje (4 cards — período) */}
+                        <div className="mb-6">
+                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2 px-1">
+                                Atendimentos de hoje
+                            </p>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                {statusCards
+                                    .filter(c => !["waiting_now", "with_team_now"].includes(c.key))
+                                    .map((card, i) => {
+                                        const Icon = card.icon;
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
+                                            >
+                                                <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className={`p-2 rounded-lg ${card.bg}`}>
+                                                        <Icon className={`w-4 h-4 ${card.text}`} />
+                                                    </div>
+                                                </div>
+                                                <div className="text-3xl font-bold text-white mb-1">
+                                                    <AnimatedNumber value={card.value} />
+                                                </div>
+                                                <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
+                                                <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
+                                            </div>
+                                        );
+                                    })}
                             </div>
-                        );
-                    })}
-                </div>
+                        </div>
+
+                        {/* Seção 2: Ao vivo — snapshots globais (2 cards) */}
+                        <div>
+                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2 px-1 flex items-center gap-1.5">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Ao vivo — todos os dias
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                {statusCards
+                                    .filter(c => ["waiting_now", "with_team_now"].includes(c.key))
+                                    .map((card, i) => {
+                                        const Icon = card.icon;
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
+                                            >
+                                                <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className={`p-2 rounded-lg ${card.bg}`}>
+                                                        <Icon className={`w-4 h-4 ${card.text}`} />
+                                                    </div>
+                                                </div>
+                                                <div className="text-3xl font-bold text-white mb-1">
+                                                    <AnimatedNumber value={card.value} />
+                                                </div>
+                                                <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
+                                                <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    /* Mensal / Anual — 4 cards no grid normal */
+                    <div className={cardsGridClass}>
+                        {visibleCards.map((card, i) => {
+                            const Icon = card.icon;
+                            return (
+                                <div
+                                    key={i}
+                                    className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
+                                >
+                                    <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className={`p-2 rounded-lg ${card.bg}`}>
+                                            <Icon className={`w-4 h-4 ${card.text}`} />
+                                        </div>
+                                    </div>
+                                    <div className="text-3xl font-bold text-white mb-1">
+                                        <AnimatedNumber value={card.value} />
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
+                                    <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             {/* ── Bottom Section ─────────────────────────────────────────────── */}
@@ -471,7 +569,7 @@ export default function DashboardPage() {
 
                     <div className="mt-5 space-y-2">
                         {(() => {
-                            const donutTotal = bs.ai + bs.waiting + bs.human + bs.finished;
+                            const donutTotal = bs.started;
                             return donutLegend.map((item) => (
                                 <div key={item.label} className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
