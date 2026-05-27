@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
     Bot,
     UserCheck,
-    Clock,
     CheckCircle2,
-    PhoneForwarded,
     Hourglass,
     MessageSquare,
     Users,
@@ -14,9 +12,12 @@ import {
     Activity,
     RefreshCw,
     Building2,
-    ArrowUpRight,
     CircleDot,
     Tag,
+    Calendar,
+    CalendarDays,
+    Sun,
+    ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -37,6 +38,8 @@ interface StatsResponse {
     by_tag?: { id: string; name: string; color: string; total: number }[];
 }
 
+type TabId = "hoje" | "mensal" | "anual";
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: number }) {
@@ -50,7 +53,7 @@ function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: n
         const step = () => {
             const elapsed = Date.now() - start;
             const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
             setDisplay(Math.round(from + (to - from) * eased));
             if (progress < 1) requestAnimationFrame(step);
         };
@@ -61,7 +64,6 @@ function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: n
     return <>{display}</>;
 }
 
-// Donut component for status distribution
 function StatusDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
     const total = data.reduce((s, d) => s + d.value, 0);
     if (total === 0) {
@@ -80,7 +82,6 @@ function StatusDonut({ data }: { data: { label: string; value: number; color: st
         return seg;
     });
 
-    // Build conic gradient
     const stops = segments.map(s => `${s.color} ${s.start}% ${s.start + s.pct}%`).join(", ");
 
     return (
@@ -97,7 +98,6 @@ function StatusDonut({ data }: { data: { label: string; value: number; color: st
     );
 }
 
-// Progress bar for agents/departments
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
     const pct = max > 0 ? (value / max) * 100 : 0;
     return (
@@ -113,26 +113,45 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 // ─── Dashboard Page ────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-    const [stats, setStats] = useState<StatsResponse | null>(null);
-    const [monthlyStats, setMonthlyStats] = useState<StatsResponse | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
+    const today = useMemo(() => new Date(), []);
 
-    const today = new Date();
+    // ── State ──────────────────────────────────────────────────────────────────
+    const [activeTab, setActiveTab]         = useState<TabId>("hoje");
+    const [activeData, setActiveData]       = useState<StatsResponse | null>(null);
+    const [selectedMonth, setSelectedMonth] = useState<string>(""); // "YYYY-MM" ou "" = mês atual
+    const [loading, setLoading]             = useState(true);
+    const [refreshing, setRefreshing]       = useState(false);
+    const [showMonthDropdown, setShowMonthDropdown] = useState(false);
 
-    const fetchStats = useCallback(async (showRefreshing = false) => {
+    // ── Lista de meses anteriores ao mês atual ─────────────────────────────────
+    const pastMonths = useMemo(() => {
+        // today.getMonth() é 0-indexed; se for 0 (janeiro), não há meses anteriores no ano
+        return Array.from({ length: today.getMonth() }, (_, i) => ({
+            value: `${today.getFullYear()}-${String(i + 1).padStart(2, "0")}`,
+            label: format(new Date(today.getFullYear(), i, 1), "MMMM 'de' yyyy", { locale: ptBR }),
+        }));
+    }, [today]);
+
+    // ── Fetch ──────────────────────────────────────────────────────────────────
+    const fetchStats = useCallback(async (
+        tab: TabId,
+        month: string = selectedMonth,
+        showRefreshing = false
+    ) => {
         if (showRefreshing) setRefreshing(true);
         try {
-            const [resToday, resMonth] = await Promise.all([
-                fetch(`/api/dashboard-today?_t=${Date.now()}`, { cache: "no-store" }),
-                fetch(`/api/dashboard-month?_t=${Date.now()}`, { cache: "no-store" })
-            ]);
-            
-            if (resToday.ok) {
-                setStats(await resToday.json());
+            let url: string;
+            if (tab === "hoje") {
+                url = `/api/dashboard-today?_t=${Date.now()}`;
+            } else if (tab === "mensal") {
+                url = `/api/dashboard-month${month ? `?month=${month}&` : "?"}_t=${Date.now()}`;
+            } else {
+                url = `/api/dashboard-annual?_t=${Date.now()}`;
             }
-            if (resMonth.ok) {
-                setMonthlyStats(await resMonth.json());
+
+            const res = await fetch(url, { cache: "no-store" });
+            if (res.ok) {
+                setActiveData(await res.json());
             }
         } catch (err) {
             console.error("Erro ao buscar stats:", err);
@@ -140,23 +159,52 @@ export default function DashboardPage() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [selectedMonth]);
 
+    // Busca inicial e ao trocar de aba
     useEffect(() => {
-        fetchStats();
-        // Auto-refresh a cada 60s
-        const interval = setInterval(() => fetchStats(false), 60000);
+        setLoading(true);
+        fetchStats(activeTab, selectedMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
+
+    // Auto-refresh a cada 60s — somente na aba Hoje
+    useEffect(() => {
+        if (activeTab !== "hoje") return;
+        const interval = setInterval(() => fetchStats("hoje", "", false), 60000);
         return () => clearInterval(interval);
-    }, [fetchStats]);
+    }, [fetchStats, activeTab]);
 
-    const bs = stats?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, team_handled: 0, total: 0 };
-    const bsMonth = monthlyStats?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, team_handled: 0, total: 0 };
+    // ── Derived ────────────────────────────────────────────────────────────────
+    const bs = activeData?.by_status ?? { ai: 0, waiting: 0, human: 0, finished: 0, team_handled: 0, total: 0 };
 
-    const getStatusCards = (data: typeof bs) => [
+    // Label do período selecionado na aba Mensal
+    const mensalLabel = useMemo(() => {
+        if (!selectedMonth) {
+            return format(today, "MMMM 'de' yyyy", { locale: ptBR });
+        }
+        const [y, m] = selectedMonth.split("-").map(Number);
+        return format(new Date(y, m - 1, 1), "MMMM 'de' yyyy", { locale: ptBR });
+    }, [selectedMonth, today]);
+
+    const cardGridTitle = useMemo(() => {
+        if (activeTab === "hoje") return "HOJE";
+        if (activeTab === "mensal") {
+            const capitalized = mensalLabel.charAt(0).toUpperCase() + mensalLabel.slice(1);
+            return capitalized;
+        }
+        return `ANO ${today.getFullYear()}`;
+    }, [activeTab, mensalLabel, today]);
+
+    const tagSectionLabel = { hoje: "Dia", mensal: "Mês", anual: "Ano" }[activeTab];
+    const emptyPeriodLabel = { hoje: "hoje", mensal: "no mês", anual: "no ano" }[activeTab];
+
+    // ── Configuração dos cards de status ───────────────────────────────────────
+    const statusCards = [
         {
             label: "Atendimentos IA",
             sublabel: "Em aberto",
-            value: data.ai,
+            value: bs.ai,
             icon: Bot,
             gradient: "from-blue-500 to-cyan-400",
             bg: "bg-blue-500/10",
@@ -166,7 +214,7 @@ export default function DashboardPage() {
         {
             label: "Aguardando",
             sublabel: "Fila da equipe",
-            value: data.waiting,
+            value: bs.waiting,
             icon: Hourglass,
             gradient: "from-orange-500 to-amber-400",
             bg: "bg-orange-500/10",
@@ -176,7 +224,7 @@ export default function DashboardPage() {
         {
             label: "Atendimento Equipe",
             sublabel: "Agentes operando",
-            value: data.human,
+            value: bs.human,
             icon: UserCheck,
             gradient: "from-amber-500 to-yellow-400",
             bg: "bg-amber-500/10",
@@ -186,7 +234,7 @@ export default function DashboardPage() {
         {
             label: "Finalizados",
             sublabel: "Concluídos no período",
-            value: data.finished,
+            value: bs.finished,
             icon: CheckCircle2,
             gradient: "from-emerald-500 to-green-400",
             bg: "bg-emerald-500/10",
@@ -196,7 +244,7 @@ export default function DashboardPage() {
         {
             label: "Total Equipe",
             sublabel: "Passaram pela equipe",
-            value: data.team_handled,
+            value: bs.team_handled,
             icon: Users,
             gradient: "from-violet-500 to-purple-400",
             bg: "bg-violet-500/10",
@@ -206,7 +254,7 @@ export default function DashboardPage() {
         {
             label: "Total Registrado",
             sublabel: "Todos os atendimentos",
-            value: data.total,
+            value: bs.total,
             icon: MessageSquare,
             gradient: "from-slate-400 to-slate-300",
             bg: "bg-slate-500/10",
@@ -215,56 +263,50 @@ export default function DashboardPage() {
         },
     ];
 
-    const renderCardGrid = (title: string, data: typeof bs) => (
-        <div className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4 pl-1 border-l-4 border-slate-700">{title}</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                {getStatusCards(data).map((card, i) => {
-                    const Icon = card.icon;
-                    return (
-                        <div
-                            key={i}
-                            className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
-                        >
-                            <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
-                            <div className="flex items-center justify-between mb-3">
-                                <div className={`p-2 rounded-lg ${card.bg}`}>
-                                    <Icon className={`w-4 h-4 ${card.text}`} />
-                                </div>
-                            </div>
-                            <div className="text-3xl font-bold text-white mb-1">
-                                <AnimatedNumber value={card.value} />
-                            </div>
-                            <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
-                            <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
+    const maxAgentTotal = Math.max(...(activeData?.by_agent ?? []).map(a => a.total), 1);
+    const maxDeptTotal  = Math.max(...(activeData?.by_department ?? []).map(d => d.total), 1);
+    const maxTagTotal   = Math.max(...(activeData?.by_tag ?? []).map(t => t.total), 1);
 
-    // Donut data (based on today normally or monthly?)
-    // Vamos manter o Donut e Rankings baseados no HOJE como no original
     const donutData = [
-        { label: "IA", value: bsMonth.ai, color: "#3b82f6" },
-        { label: "Aguardando", value: bsMonth.waiting, color: "#f97316" },
-        { label: "Equipe", value: bsMonth.human, color: "#f59e0b" },
-        { label: "Finalizados", value: bsMonth.finished, color: "#10b981" },
+        { label: "IA",         value: bs.ai,       color: "#3b82f6" },
+        { label: "Aguardando", value: bs.waiting,   color: "#f97316" },
+        { label: "Equipe",     value: bs.human,     color: "#f59e0b" },
+        { label: "Finalizados",value: bs.finished,  color: "#10b981" },
     ];
-
     const donutLegend = [
-        { label: "IA", color: "bg-blue-500", value: bsMonth.ai },
-        { label: "Aguardando", color: "bg-orange-500", value: bsMonth.waiting },
-        { label: "Equipe", color: "bg-amber-500", value: bsMonth.human },
-        { label: "Finalizados", color: "bg-emerald-500", value: bsMonth.finished },
+        { label: "IA",         color: "bg-blue-500",    value: bs.ai },
+        { label: "Aguardando", color: "bg-orange-500",  value: bs.waiting },
+        { label: "Equipe",     color: "bg-amber-500",   value: bs.human },
+        { label: "Finalizados",color: "bg-emerald-500", value: bs.finished },
     ];
 
-    // Skeleton
+    // ── Tabs config ────────────────────────────────────────────────────────────
+    const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
+        { id: "hoje",   label: "Hoje",   icon: Sun },
+        { id: "mensal", label: "Mensal", icon: CalendarDays },
+        { id: "anual",  label: "Anual",  icon: Calendar },
+    ];
+
+    // ── Handlers ───────────────────────────────────────────────────────────────
+    const handleTabChange = (tab: TabId) => {
+        if (tab === activeTab) return;
+        setSelectedMonth("");
+        setShowMonthDropdown(false);
+        setActiveTab(tab);
+    };
+
+    const handleMonthSelect = (month: string) => {
+        setSelectedMonth(month);
+        setShowMonthDropdown(false);
+        fetchStats("mensal", month, true);
+    };
+
+    // ── Skeleton ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
             <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
                 <div className="h-8 w-64 bg-slate-800 rounded-lg animate-pulse" />
+                <div className="h-10 w-72 bg-slate-800 rounded-xl animate-pulse" />
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {[...Array(6)].map((_, i) => (
                         <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl h-28 animate-pulse" />
@@ -279,13 +321,10 @@ export default function DashboardPage() {
         );
     }
 
-    const maxAgentTotal = Math.max(...(monthlyStats?.by_agent ?? []).map(a => a.total), 1);
-    const maxDeptTotal = Math.max(...(monthlyStats?.by_department ?? []).map(d => d.total), 1);
-    const maxTagTotal = Math.max(...(monthlyStats?.by_tag ?? []).map(t => t.total), 1);
-
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto h-full">
-            {/* Header */}
+
+            {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -299,7 +338,7 @@ export default function DashboardPage() {
                     </p>
                 </div>
                 <button
-                    onClick={() => fetchStats(true)}
+                    onClick={() => fetchStats(activeTab, selectedMonth, true)}
                     disabled={refreshing}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-all text-sm"
                 >
@@ -308,12 +347,117 @@ export default function DashboardPage() {
                 </button>
             </div>
 
-            {/* Status Cards */}
-            {renderCardGrid("HOJE", bs)}
-            {renderCardGrid("MÊS ATUAL", bsMonth)}
+            {/* ── Tab Bar ────────────────────────────────────────────────────── */}
+            <div className="flex items-center gap-1 mb-6 bg-slate-900 border border-slate-800 rounded-2xl p-1 w-fit">
+                {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => handleTabChange(tab.id)}
+                            className={`
+                                flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                                ${isActive
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                                }
+                            `}
+                        >
+                            <Icon className="w-4 h-4" />
+                            {tab.label}
+                        </button>
+                    );
+                })}
+            </div>
 
-            {/* Bottom Section: Donut + Agents + Departments */}
+            {/* ── Selector de Mês (somente aba Mensal) ───────────────────────── */}
+            {activeTab === "mensal" && (
+                <div className="mb-6 flex items-center gap-3">
+                    <span className="text-sm text-slate-400">Período:</span>
+
+                    {pastMonths.length === 0 ? (
+                        // Janeiro — nenhum mês anterior disponível
+                        <span className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-sm">
+                            {format(today, "MMMM 'de' yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase())} (atual)
+                        </span>
+                    ) : (
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowMonthDropdown(v => !v)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition-all text-sm"
+                            >
+                                <CalendarDays className="w-4 h-4 text-slate-400" />
+                                {selectedMonth
+                                    ? mensalLabel.charAt(0).toUpperCase() + mensalLabel.slice(1)
+                                    : format(today, "MMMM 'de' yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase()) + " (atual)"
+                                }
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showMonthDropdown ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {showMonthDropdown && (
+                                <div className="absolute top-full left-0 mt-2 z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden min-w-[220px]">
+                                    {/* Mês atual */}
+                                    <button
+                                        onClick={() => handleMonthSelect("")}
+                                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-slate-800 ${!selectedMonth ? "text-blue-400 font-semibold bg-blue-500/10" : "text-slate-300"}`}
+                                    >
+                                        {format(today, "MMMM 'de' yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase())} <span className="text-slate-500 text-xs">(atual)</span>
+                                    </button>
+
+                                    {/* Divisor */}
+                                    <div className="border-t border-slate-800" />
+
+                                    {/* Meses anteriores — mais recente primeiro */}
+                                    {[...pastMonths].reverse().map((m) => (
+                                        <button
+                                            key={m.value}
+                                            onClick={() => handleMonthSelect(m.value)}
+                                            className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-slate-800 ${selectedMonth === m.value ? "text-blue-400 font-semibold bg-blue-500/10" : "text-slate-300"}`}
+                                        >
+                                            {m.label.charAt(0).toUpperCase() + m.label.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Cards de Status ────────────────────────────────────────────── */}
+            <div className="mb-8">
+                <h2 className="text-xl font-bold text-white mb-4 pl-1 border-l-4 border-slate-700">
+                    {cardGridTitle}
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    {statusCards.map((card, i) => {
+                        const Icon = card.icon;
+                        return (
+                            <div
+                                key={i}
+                                className={`relative overflow-hidden bg-slate-900 border ${card.border} rounded-2xl p-4 group hover:border-opacity-60 transition-all`}
+                            >
+                                <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${card.gradient}`} />
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className={`p-2 rounded-lg ${card.bg}`}>
+                                        <Icon className={`w-4 h-4 ${card.text}`} />
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-bold text-white mb-1">
+                                    <AnimatedNumber value={card.value} />
+                                </div>
+                                <p className="text-xs text-slate-400 font-medium leading-tight">{card.label}</p>
+                                <p className="text-[10px] text-slate-600 mt-0.5 truncate">{card.sublabel}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* ── Bottom Section ─────────────────────────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
                 {/* Distribuição */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                     <div className="flex items-center gap-2.5 mb-5">
@@ -334,9 +478,9 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-white">{item.value}</span>
-                                    {bsMonth.total > 0 && (
+                                    {bs.total > 0 && (
                                         <span className="text-[10px] text-slate-600">
-                                            {((item.value / bsMonth.total) * 100).toFixed(0)}%
+                                            {((item.value / bs.total) * 100).toFixed(0)}%
                                         </span>
                                     )}
                                 </div>
@@ -354,14 +498,14 @@ export default function DashboardPage() {
                         <h2 className="text-sm font-semibold text-white">Por Atendente</h2>
                     </div>
 
-                    {(monthlyStats?.by_agent ?? []).length === 0 ? (
+                    {(activeData?.by_agent ?? []).length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
                             <Users className="w-8 h-8 text-slate-700 mb-2" />
-                            <p className="text-xs text-slate-500">Nenhum atendente ativo no mês</p>
+                            <p className="text-xs text-slate-500">Nenhum atendente ativo {emptyPeriodLabel}</p>
                         </div>
                     ) : (
                         <div className="space-y-3.5">
-                            {(monthlyStats?.by_agent ?? []).slice(0, 6).map((agent) => (
+                            {(activeData?.by_agent ?? []).slice(0, 6).map((agent) => (
                                 <div key={agent.id}>
                                     <div className="flex items-center justify-between mb-1">
                                         <div className="flex items-center gap-2 min-w-0">
@@ -383,7 +527,7 @@ export default function DashboardPage() {
                     )}
                 </div>
 
-                {/* Por Departamento + Status do Sistema */}
+                {/* Por Departamento + Tags + Status */}
                 <div className="space-y-4">
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                         <div className="flex items-center gap-2.5 mb-5">
@@ -393,14 +537,14 @@ export default function DashboardPage() {
                             <h2 className="text-sm font-semibold text-white">Por Departamento</h2>
                         </div>
 
-                        {(monthlyStats?.by_department ?? []).length === 0 ? (
+                        {(activeData?.by_department ?? []).length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-4 text-center">
                                 <Building2 className="w-7 h-7 text-slate-700 mb-2" />
-                                <p className="text-xs text-slate-500">Nenhum departamento ativo no mês</p>
+                                <p className="text-xs text-slate-500">Nenhum departamento ativo {emptyPeriodLabel}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {(monthlyStats?.by_department ?? []).slice(0, 5).map((dept) => (
+                                {(activeData?.by_department ?? []).slice(0, 5).map((dept) => (
                                     <div key={dept.id}>
                                         <div className="flex items-center justify-between mb-1">
                                             <span className="text-xs text-slate-300">{dept.name}</span>
@@ -413,23 +557,23 @@ export default function DashboardPage() {
                         )}
                     </div>
 
-                    {/* Top Tags do Mês */}
+                    {/* Top Tags */}
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                         <div className="flex items-center gap-2.5 mb-5">
                             <div className="p-2 rounded-lg bg-emerald-500/10">
                                 <Tag className="w-4 h-4 text-emerald-400" />
                             </div>
-                            <h2 className="text-sm font-semibold text-white">Top Tags do Mês</h2>
+                            <h2 className="text-sm font-semibold text-white">Top Tags do {tagSectionLabel}</h2>
                         </div>
 
-                        {(monthlyStats?.by_tag ?? []).length === 0 ? (
+                        {(activeData?.by_tag ?? []).length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-4 text-center">
                                 <Tag className="w-7 h-7 text-slate-700 mb-2" />
-                                <p className="text-xs text-slate-500">Nenhuma tag usada no mês</p>
+                                <p className="text-xs text-slate-500">Nenhuma tag usada {emptyPeriodLabel}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {(monthlyStats?.by_tag ?? []).slice(0, 5).map((t) => (
+                                {(activeData?.by_tag ?? []).slice(0, 5).map((t) => (
                                     <div key={t.id}>
                                         <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center gap-2">
@@ -438,11 +582,13 @@ export default function DashboardPage() {
                                             </div>
                                             <span className="text-sm font-bold text-white">{t.total}</span>
                                         </div>
-                                        {/* Utilizando style customizado para a cor da barra não ser uma classe fixa Tailwind */}
                                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                             <div
                                                 className="h-full rounded-full transition-all duration-500"
-                                                style={{ width: `${maxTagTotal > 0 ? (t.total / maxTagTotal) * 100 : 0}%`, backgroundColor: t.color }}
+                                                style={{
+                                                    width: `${maxTagTotal > 0 ? (t.total / maxTagTotal) * 100 : 0}%`,
+                                                    backgroundColor: t.color,
+                                                }}
                                             />
                                         </div>
                                     </div>
@@ -471,6 +617,14 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Fechar dropdown ao clicar fora */}
+            {showMonthDropdown && (
+                <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowMonthDropdown(false)}
+                />
+            )}
         </div>
     );
 }

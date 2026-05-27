@@ -1,41 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 /**
- * GET /api/dashboard-month
- * GET /api/dashboard-month?month=YYYY-MM
+ * GET /api/dashboard-annual
  *
- * Retorna métricas do dashboard consolidadas por mês:
- * - Ativos no mês (created_at ou updated_at no intervalo)
- * - Concluídos no mês
- * - Iniciados no mês (total)
+ * Retorna métricas do dashboard consolidadas pelo ano corrente (Jan 1 → Dez 31):
+ * - Ativos no ano
+ * - Concluídos no ano
+ * - Iniciados no ano (total)
  * - Por atendente
  * - Por departamento
  * - Top tags
- *
- * Sem parâmetro → mês atual. Com ?month=2026-03 → março de 2026.
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
         const now = new Date();
+        const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        const yearEnd   = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
 
-        // Parsear parâmetro ?month=YYYY-MM
-        const monthParam = req.nextUrl.searchParams.get("month");
-        let year = now.getFullYear();
-        let month = now.getMonth(); // 0-indexed
-
-        if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
-            const [y, m] = monthParam.split("-").map(Number);
-            if (y >= 2020 && m >= 1 && m <= 12) {
-                year = y;
-                month = m - 1; // converter para 0-indexed
-            }
-        }
-
-        const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
-        const monthEnd   = new Date(year, month + 1, 0, 23, 59, 59, 999);
-
-        // ── 1. Estado atual dos chats ativos no mês ───────────────────────────
+        // ── 1. Estado atual dos chats ativos no ano ───────────────────────────
         const activeStatusQuery = `
             SELECT
                 COALESCE(
@@ -54,7 +37,7 @@ export async function GET(req: NextRequest) {
             GROUP BY 1
         `;
 
-        // ── 2. Concluídos no mês (filtro por updated_at) ──────────────────────
+        // ── 2. Concluídos no ano (filtro por updated_at) ──────────────────────
         const finishedQuery = `
             SELECT
                 COALESCE(c.status, 'finished') AS status,
@@ -66,14 +49,14 @@ export async function GET(req: NextRequest) {
             GROUP BY 1
         `;
 
-        // ── 3. Total iniciados no mês ─────────────────────────────────────────
+        // ── 3. Total iniciados no ano ─────────────────────────────────────────
         const startedQuery = `
             SELECT COUNT(*)::int AS total
             FROM chats c
             WHERE c.created_at >= $1 AND c.created_at <= $2
         `;
 
-        // ── 4. Por atendente (ativos + finalizados no mês) ────────────────────
+        // ── 4. Por atendente (ativos + finalizados no ano) ────────────────────
         const agentQuery = `
             SELECT
                 u.id::text AS user_id,
@@ -111,7 +94,7 @@ export async function GET(req: NextRequest) {
             LIMIT 8
         `;
 
-        // ── 6. Top Tags do Mês ────────────────────────────────────────────────
+        // ── 6. Top Tags do Ano ────────────────────────────────────────────────
         const tagsQuery = `
             SELECT
                 t.id::text AS tag_id,
@@ -139,13 +122,13 @@ export async function GET(req: NextRequest) {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const [activeRows, finishedRows, startedRows, agentRows, deptRows, tagRows, teamHandledRows] = await Promise.all([
-            prisma.$queryRawUnsafe<any[]>(activeStatusQuery, monthStart, monthEnd),
-            prisma.$queryRawUnsafe<any[]>(finishedQuery, monthStart, monthEnd),
-            prisma.$queryRawUnsafe<any[]>(startedQuery, monthStart, monthEnd),
-            prisma.$queryRawUnsafe<any[]>(agentQuery, monthStart, monthEnd),
-            prisma.$queryRawUnsafe<any[]>(deptQuery, monthStart, monthEnd),
-            prisma.$queryRawUnsafe<any[]>(tagsQuery, monthStart, monthEnd),
-            prisma.$queryRawUnsafe<any[]>(teamHandledQuery, monthStart, monthEnd),
+            prisma.$queryRawUnsafe<any[]>(activeStatusQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(finishedQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(startedQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(agentQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(deptQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(tagsQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(teamHandledQuery, yearStart, yearEnd),
         ]);
 
         const byStatus = {
@@ -193,7 +176,7 @@ export async function GET(req: NextRequest) {
             })) : [],
         });
     } catch (error) {
-        console.error("Erro ao buscar dados do dashboard mensal:", error);
+        console.error("Erro ao buscar dados do dashboard anual:", error);
         return NextResponse.json({ error: "Erro interno" }, { status: 500 });
     }
 }
