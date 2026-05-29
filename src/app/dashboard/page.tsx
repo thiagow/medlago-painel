@@ -16,11 +16,13 @@ import {
     CalendarDays,
     Sun,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Sparkles,
     UsersRound,
     PlayCircle,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameDay, isSameMonth, isAfter, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -32,8 +34,9 @@ interface StatsResponse {
         waiting_in_period: number;
         transferred_to_team: number;
         finished: number;
-        waiting_now?: number;     // apenas em /dashboard-today
-        with_team_now?: number;   // apenas em /dashboard-today
+        waiting_now?: number;
+        with_team_now?: number;
+        ai_active_now?: number;
     };
     by_agent: { id: string; name: string; total: number; finished: number; transferred_external: number }[];
     by_department: { id: string; name: string; total: number }[];
@@ -67,8 +70,111 @@ function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: n
     return <>{display}</>;
 }
 
-function StatusDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
-    const total = data.reduce((s, d) => s + d.value, 0);
+// ─── DatePickerCalendar ────────────────────────────────────────────────────────
+function DatePickerCalendar({
+    selected,
+    today,
+    onSelect,
+}: {
+    selected: Date | null;
+    today: Date;
+    onSelect: (date: Date) => void;
+}) {
+    const [viewDate, setViewDate] = useState(selected ?? today);
+
+    const monthStart = startOfMonth(viewDate);
+    const monthEnd   = endOfMonth(viewDate);
+    const gridStart  = startOfWeek(monthStart, { weekStartsOn: 0 });
+    const gridEnd    = endOfWeek(monthEnd,   { weekStartsOn: 0 });
+    const days       = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+    const canGoNext = isSameMonth(viewDate, today)
+        ? false
+        : !isAfter(addMonths(viewDate, 1), today);
+    const canGoPrev = viewDate.getFullYear() > today.getFullYear() - 1 ||
+        (viewDate.getFullYear() === today.getFullYear() - 1 && viewDate.getMonth() >= today.getMonth() - 2);
+
+    return (
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-4 w-72">
+            {/* Navegação de mês */}
+            <div className="flex items-center justify-between mb-4">
+                <button
+                    onClick={() => setViewDate(v => subMonths(v, 1))}
+                    disabled={!canGoPrev}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-semibold text-white">
+                    {format(viewDate, "MMMM 'de' yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase())}
+                </span>
+                <button
+                    onClick={() => setViewDate(v => addMonths(v, 1))}
+                    disabled={!canGoNext}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+            </div>
+
+            {/* Cabeçalho dos dias da semana */}
+            <div className="grid grid-cols-7 mb-1">
+                {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
+                    <div key={i} className="text-center text-[10px] font-semibold text-slate-500 py-1">
+                        {d}
+                    </div>
+                ))}
+            </div>
+
+            {/* Grade de dias */}
+            <div className="grid grid-cols-7 gap-y-0.5">
+                {days.map((day) => {
+                    const isCurrMonth = isSameMonth(day, viewDate);
+                    const isSelected  = selected ? isSameDay(day, selected) : false;
+                    const isToday_    = isSameDay(day, today);
+                    const isFuture    = isAfter(day, today);
+
+                    return (
+                        <button
+                            key={day.toISOString()}
+                            disabled={isFuture || !isCurrMonth}
+                            onClick={() => onSelect(day)}
+                            className={`
+                                h-8 w-8 mx-auto rounded-full text-xs font-medium transition-all
+                                ${isSelected
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                    : isToday_ && isCurrMonth
+                                        ? "bg-slate-700 text-white ring-1 ring-blue-500/50"
+                                        : isCurrMonth && !isFuture
+                                            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                                            : "text-slate-700 cursor-default"
+                                }
+                            `}
+                        >
+                            {format(day, "d")}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Atalho "Hoje" */}
+            {!isSameDay(selected ?? today, today) && (
+                <div className="mt-3 pt-3 border-t border-slate-800">
+                    <button
+                        onClick={() => onSelect(today)}
+                        className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-1"
+                    >
+                        Ir para hoje
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function StatusDonut({ data, total: forcedTotal }: { data: { label: string; value: number; color: string }[], total?: number }) {
+    const dataSum = data.reduce((s, d) => s + d.value, 0);
+    const total = forcedTotal ?? dataSum;
     if (total === 0) {
         return (
             <div className="w-40 h-40 rounded-full border-[12px] border-slate-800 flex items-center justify-center">
@@ -85,7 +191,9 @@ function StatusDonut({ data }: { data: { label: string; value: number; color: st
         return seg;
     });
 
-    const stops = segments.map(s => `${s.color} ${s.start}% ${s.start + s.pct}%`).join(", ");
+    const stops = segments.length > 0
+        ? segments.map(s => `${s.color} ${s.start}% ${s.start + s.pct}%`).join(", ")
+        : "#1e293b 0% 100%";
 
     return (
         <div className="relative w-40 h-40 mx-auto">
@@ -122,9 +230,28 @@ export default function DashboardPage() {
     const [activeTab, setActiveTab]         = useState<TabId>("hoje");
     const [activeData, setActiveData]       = useState<StatsResponse | null>(null);
     const [selectedMonth, setSelectedMonth] = useState<string>(""); // "YYYY-MM" ou "" = mês atual
+    const [selectedDate, setSelectedDate]   = useState<string>(""); // "YYYY-MM-DD" ou "" = hoje
     const [loading, setLoading]             = useState(true);
     const [refreshing, setRefreshing]       = useState(false);
     const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+    const [showDateDropdown, setShowDateDropdown]   = useState(false);
+
+    // ── Lista de dias recentes (ontem → 90 dias atrás) ────────────────────────
+    const pastDays = useMemo(() => {
+        return Array.from({ length: 90 }, (_, i) => {
+            const d = new Date(today);
+            d.setDate(d.getDate() - (i + 1));
+            return {
+                value: format(d, "yyyy-MM-dd"),
+                label: format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
+                shortLabel: format(d, "dd/MM/yyyy"),
+                isYesterday: i === 0,
+            };
+        });
+    }, [today]);
+
+    const todayStr = format(today, "yyyy-MM-dd");
+    const isToday  = !selectedDate || selectedDate === todayStr;
 
     // ── Lista de meses anteriores ao mês atual ─────────────────────────────────
     const pastMonths = useMemo(() => {
@@ -139,13 +266,14 @@ export default function DashboardPage() {
     const fetchStats = useCallback(async (
         tab: TabId,
         month: string = selectedMonth,
-        showRefreshing = false
+        showRefreshing = false,
+        date: string = selectedDate,
     ) => {
         if (showRefreshing) setRefreshing(true);
         try {
             let url: string;
             if (tab === "hoje") {
-                url = `/api/dashboard-today?_t=${Date.now()}`;
+                url = `/api/dashboard-today?${date ? `date=${date}&` : ""}_t=${Date.now()}`;
             } else if (tab === "mensal") {
                 url = `/api/dashboard-month${month ? `?month=${month}&` : "?"}_t=${Date.now()}`;
             } else {
@@ -171,12 +299,12 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
 
-    // Auto-refresh a cada 60s — somente na aba Hoje
+    // Auto-refresh a cada 60s — somente na aba Hoje E quando visualizando hoje
     useEffect(() => {
-        if (activeTab !== "hoje") return;
-        const interval = setInterval(() => fetchStats("hoje", "", false), 60000);
+        if (activeTab !== "hoje" || !isToday) return;
+        const interval = setInterval(() => fetchStats("hoje", "", false, ""), 60000);
         return () => clearInterval(interval);
-    }, [fetchStats, activeTab]);
+    }, [fetchStats, activeTab, isToday]);
 
     // ── Derived ────────────────────────────────────────────────────────────────
     const bs = activeData?.by_status ?? {
@@ -199,19 +327,25 @@ export default function DashboardPage() {
     }, [selectedMonth, today]);
 
     const cardGridTitle = useMemo(() => {
-        if (activeTab === "hoje") return "HOJE";
+        if (activeTab === "hoje") {
+            if (!isToday && selectedDate) {
+                const [y, m, d] = selectedDate.split("-").map(Number);
+                return format(new Date(y, m - 1, d), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase();
+            }
+            return "HOJE";
+        }
         if (activeTab === "mensal") {
             const capitalized = mensalLabel.charAt(0).toUpperCase() + mensalLabel.slice(1);
             return capitalized;
         }
         return `ANO ${today.getFullYear()}`;
-    }, [activeTab, mensalLabel, today]);
+    }, [activeTab, mensalLabel, today, isToday, selectedDate]);
 
     const tagSectionLabel = { hoje: "Dia", mensal: "Mês", anual: "Ano" }[activeTab];
     const emptyPeriodLabel = { hoje: "hoje", mensal: "no mês", anual: "no ano" }[activeTab];
 
-    // Snapshots (Aguardando / Sendo Atendidos) apenas na aba Hoje
-    const showSnapshots = activeTab === "hoje";
+    // Snapshots (Aguardando / Sendo Atendidos) apenas na aba Hoje E no dia atual
+    const showSnapshots = activeTab === "hoje" && isToday;
 
     // ── Configuração dos cards de status ───────────────────────────────────────
     const statusCards = [
@@ -295,15 +429,13 @@ export default function DashboardPage() {
     const maxDeptTotal  = Math.max(...(activeData?.by_department ?? []).map(d => d.total), 1);
     const maxTagTotal   = Math.max(...(activeData?.by_tag ?? []).map(t => t.total), 1);
 
-    // Donut — 3 fatias mutuamente exclusivas. Soma = bs.started
+    // Donut — 2 fatias do período selecionado; centro = bs.started
     const donutData = [
         { label: "Atendidos só pela IA",  value: bs.served_by_ai_only,   color: "#10b981" },
-        { label: "Aguardando",            value: bs.waiting_in_period,   color: "#f97316" },
         { label: "Atendidos pela Equipe", value: bs.transferred_to_team, color: "#8b5cf6" },
     ];
     const donutLegend = [
         { label: "Atendidos só pela IA",  color: "bg-emerald-500", value: bs.served_by_ai_only },
-        { label: "Aguardando",            color: "bg-orange-500",  value: bs.waiting_in_period },
         { label: "Atendidos pela Equipe", color: "bg-violet-500",  value: bs.transferred_to_team },
     ];
 
@@ -318,8 +450,22 @@ export default function DashboardPage() {
     const handleTabChange = (tab: TabId) => {
         if (tab === activeTab) return;
         setSelectedMonth("");
+        setSelectedDate("");
         setShowMonthDropdown(false);
+        setShowDateDropdown(false);
         setActiveTab(tab);
+    };
+
+    const handleDateSelect = (date: string) => {
+        setSelectedDate(date);
+        setShowDateDropdown(false);
+        fetchStats("hoje", "", true, date);
+    };
+
+    const handleResetToday = () => {
+        setSelectedDate("");
+        setShowDateDropdown(false);
+        fetchStats("hoje", "", true, "");
     };
 
     const handleMonthSelect = (month: string) => {
@@ -454,9 +600,49 @@ export default function DashboardPage() {
 
             {/* ── Cards de Status ────────────────────────────────────────────── */}
             <div className="mb-8">
-                <h2 className="text-xl font-bold text-white mb-4 pl-1 border-l-4 border-slate-700">
-                    {cardGridTitle}
-                </h2>
+                <div className="flex items-center gap-3 mb-4 pl-1 border-l-4 border-slate-700">
+                    <h2 className="text-xl font-bold text-white">{cardGridTitle}</h2>
+
+                    {/* Seletor de data — somente aba Hoje */}
+                    {activeTab === "hoje" && (
+                        <div className="relative flex items-center gap-2">
+                            <button
+                                onClick={() => setShowDateDropdown(v => !v)}
+                                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-all text-xs"
+                            >
+                                <CalendarDays className="w-3.5 h-3.5" />
+                                {isToday ? "Hoje" : (pastDays.find(d => d.value === selectedDate)?.shortLabel ?? selectedDate)}
+                                <ChevronDown className={`w-3 h-3 transition-transform ${showDateDropdown ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {showDateDropdown && (
+                                <div className="absolute top-full left-0 mt-2 z-50">
+                                    <DatePickerCalendar
+                                        selected={selectedDate ? parseISO(selectedDate) : today}
+                                        today={today}
+                                        onSelect={(date) => {
+                                            const val = format(date, "yyyy-MM-dd");
+                                            if (val === format(today, "yyyy-MM-dd")) {
+                                                handleResetToday();
+                                            } else {
+                                                handleDateSelect(val);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                            {!isToday && (
+                                <button
+                                    onClick={handleResetToday}
+                                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
+                                >
+                                    ← Hoje
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {showSnapshots ? (
                     <>
@@ -565,7 +751,7 @@ export default function DashboardPage() {
                         <h2 className="text-sm font-semibold text-white">Distribuição</h2>
                     </div>
 
-                    <StatusDonut data={donutData} />
+                    <StatusDonut data={donutData} total={bs.started} />
 
                     <div className="mt-5 space-y-2">
                         {(() => {

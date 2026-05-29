@@ -18,23 +18,35 @@ import { prisma } from "@/lib/prisma";
  * - by_agent / by_department: chats iniciados no período E atribuídos ao atendente/depto.
  * - by_tag: tags aplicadas no período.
  */
-export async function GET() {
+export async function GET(req: Request) {
     try {
+        const { searchParams } = new URL(req.url);
+        const dateParam = searchParams.get("date"); // "YYYY-MM-DD"
+
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        let ref = now;
+        if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+            const parsed = new Date(`${dateParam}T12:00:00`); // noon para evitar timezone shift
+            if (!isNaN(parsed.getTime()) && parsed <= now) {
+                ref = parsed;
+            }
+        }
+
+        const todayStart = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 0, 0, 0, 0);
+        const todayEnd   = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 23, 59, 59, 999);
 
         // ── Contagens sobre chats iniciados no período + Donut em uma única query ──
         const periodCountsQuery = `
             SELECT
                 COUNT(*)::int AS started,
-                COUNT(CASE WHEN c.assigned_to IS NULL
-                            AND NOT (c.status = 'waiting' OR c.ai_service = 'waiting')
-                          THEN 1 END)::int AS served_by_ai_only,
-                COUNT(CASE WHEN c.assigned_to IS NULL
-                            AND (c.status = 'waiting' OR c.ai_service = 'waiting')
+                COUNT(CASE WHEN c.ai_service = 'waiting'
                           THEN 1 END)::int AS waiting_in_period,
-                COUNT(CASE WHEN c.assigned_to IS NOT NULL THEN 1 END)::int AS transferred_to_team,
+                COUNT(CASE WHEN c.assigned_to IS NOT NULL
+                            AND COALESCE(c.ai_service, '') <> 'waiting'
+                          THEN 1 END)::int AS transferred_to_team,
+                COUNT(CASE WHEN c.assigned_to IS NULL
+                            AND COALESCE(c.ai_service, '') <> 'waiting'
+                          THEN 1 END)::int AS served_by_ai_only,
                 COUNT(CASE WHEN c.finished = true THEN 1 END)::int AS finished
             FROM chats c
             WHERE c.created_at >= $1 AND c.created_at <= $2
@@ -45,7 +57,7 @@ export async function GET() {
             SELECT COUNT(*)::int AS total
             FROM chats c
             WHERE (c.finished IS NULL OR c.finished = false)
-              AND (c.status = 'waiting' OR c.ai_service = 'waiting')
+              AND c.ai_service = 'waiting'
         `;
 
         const withTeamNowQuery = `
@@ -53,6 +65,13 @@ export async function GET() {
             FROM chats c
             WHERE (c.finished IS NULL OR c.finished = false)
               AND (c.status = 'human' OR c.ai_service = 'paused')
+        `;
+
+        const aiActiveNowQuery = `
+            SELECT COUNT(*)::int AS total
+            FROM chats c
+            WHERE (c.finished IS NULL OR c.finished = false)
+              AND (c.ai_service IS NULL OR c.ai_service IN ('active', 'true'))
         `;
 
         // ── Por atendente — chats iniciados no período E atribuídos ao atendente ──
@@ -101,10 +120,11 @@ export async function GET() {
         `;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const [periodRows, waitingRows, withTeamRows, agentRows, deptRows, tagRows] = await Promise.all([
+        const [periodRows, waitingRows, withTeamRows, aiActiveRows, agentRows, deptRows, tagRows] = await Promise.all([
             prisma.$queryRawUnsafe<any[]>(periodCountsQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(waitingNowQuery),
             prisma.$queryRawUnsafe<any[]>(withTeamNowQuery),
+            prisma.$queryRawUnsafe<any[]>(aiActiveNowQuery),
             prisma.$queryRawUnsafe<any[]>(agentQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(deptQuery, todayStart, todayEnd),
             prisma.$queryRawUnsafe<any[]>(tagsQuery, todayStart, todayEnd),
@@ -126,6 +146,7 @@ export async function GET() {
                 finished,
                 waiting_now: Number(waitingRows?.[0]?.total || 0),
                 with_team_now: Number(withTeamRows?.[0]?.total || 0),
+                ai_active_now: Number(aiActiveRows?.[0]?.total || 0),
             },
             by_agent: Array.isArray(agentRows) ? agentRows.map(r => ({
                 id: String(r.user_id),

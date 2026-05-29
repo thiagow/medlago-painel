@@ -51,6 +51,7 @@ export async function POST(
             where: { id: chatId },
             data: {
                 ai_service: "paused",
+                status: "human",
                 updated_at: pauseUntil,
                 ...(userIdBigInt ? {
                     assigned_to: userIdBigInt,

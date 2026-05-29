@@ -20,12 +20,13 @@ export async function GET() {
             SELECT
                 COUNT(*)::int AS started,
                 COUNT(CASE WHEN c.assigned_to IS NULL
-                            AND NOT (c.status = 'waiting' OR c.ai_service = 'waiting')
+                            AND COALESCE(c.ai_service, '') <> 'waiting'
                           THEN 1 END)::int AS served_by_ai_only,
-                COUNT(CASE WHEN c.assigned_to IS NULL
-                            AND (c.status = 'waiting' OR c.ai_service = 'waiting')
+                COUNT(CASE WHEN c.ai_service = 'waiting'
                           THEN 1 END)::int AS waiting_in_period,
-                COUNT(CASE WHEN c.assigned_to IS NOT NULL THEN 1 END)::int AS transferred_to_team,
+                COUNT(CASE WHEN c.assigned_to IS NOT NULL
+                            AND COALESCE(c.ai_service, '') <> 'waiting'
+                          THEN 1 END)::int AS transferred_to_team,
                 COUNT(CASE WHEN c.finished = true THEN 1 END)::int AS finished
             FROM chats c
             WHERE c.created_at >= $1 AND c.created_at <= $2
@@ -73,9 +74,33 @@ export async function GET() {
             LIMIT 5
         `;
 
+        const waitingNowQuery = `
+            SELECT COUNT(*)::int AS total
+            FROM chats c
+            WHERE (c.finished IS NULL OR c.finished = false)
+              AND c.ai_service = 'waiting'
+        `;
+
+        const withTeamNowQuery = `
+            SELECT COUNT(*)::int AS total
+            FROM chats c
+            WHERE (c.finished IS NULL OR c.finished = false)
+              AND (c.status = 'human' OR c.ai_service = 'paused')
+        `;
+
+        const aiActiveNowQuery = `
+            SELECT COUNT(*)::int AS total
+            FROM chats c
+            WHERE (c.finished IS NULL OR c.finished = false)
+              AND (c.ai_service IS NULL OR c.ai_service IN ('active', 'true'))
+        `;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const [periodRows, agentRows, deptRows, tagRows] = await Promise.all([
+        const [periodRows, waitingRows, withTeamRows, aiActiveRows, agentRows, deptRows, tagRows] = await Promise.all([
             prisma.$queryRawUnsafe<any[]>(periodCountsQuery, yearStart, yearEnd),
+            prisma.$queryRawUnsafe<any[]>(waitingNowQuery),
+            prisma.$queryRawUnsafe<any[]>(withTeamNowQuery),
+            prisma.$queryRawUnsafe<any[]>(aiActiveNowQuery),
             prisma.$queryRawUnsafe<any[]>(agentQuery, yearStart, yearEnd),
             prisma.$queryRawUnsafe<any[]>(deptQuery, yearStart, yearEnd),
             prisma.$queryRawUnsafe<any[]>(tagsQuery, yearStart, yearEnd),
@@ -95,6 +120,9 @@ export async function GET() {
                 waiting_in_period,
                 transferred_to_team,
                 finished,
+                waiting_now: Number(waitingRows?.[0]?.total || 0),
+                with_team_now: Number(withTeamRows?.[0]?.total || 0),
+                ai_active_now: Number(aiActiveRows?.[0]?.total || 0),
             },
             by_agent: Array.isArray(agentRows) ? agentRows.map(r => ({
                 id: String(r.user_id),

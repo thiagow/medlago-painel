@@ -45,7 +45,7 @@ export async function POST(
         });
 
         // 2. Atualiza a conversa: pausa IA e garante atendente vinculado
-        const updateData: any = { updated_at: new Date() };
+        const updateData: any = { updated_at: new Date(), status: "human" };
         if (chat.ai_service !== "paused") {
             // 'waiting' e 'active' passam para 'paused' quando atendente envia mensagem
             updateData.ai_service = "paused";
