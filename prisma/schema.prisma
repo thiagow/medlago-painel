@@ -316,6 +316,8 @@ model SuporteTicket {
   created_by    BigInt
   resolved_by   BigInt?
   resolved_at   DateTime? @db.Timestamptz(6)
+  deleted_at    DateTime? @db.Timestamptz(6)
+  deleted_by    BigInt?
 
   @@map("suporte_tickets")
 }

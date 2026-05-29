@@ -21,7 +21,8 @@ export async function GET(
         const ticketId = BigInt(id);
         const ticket = await prisma.suporteTicket.findUnique({ where: { id: ticketId } });
 
-        if (!ticket) return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (!ticket || (ticket as any).deleted_at) return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
 
         // RBAC: atendente só acessa seus próprios tickets
         if (userRole !== "admin" && String(ticket.created_by) !== userId) {
@@ -100,6 +101,44 @@ export async function GET(
         });
     } catch (error) {
         console.error("Erro ao buscar ticket:", error);
+        return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    }
+}
+
+// ── DELETE /api/suporte/[id] ─────────────────────────────────────────────────
+// Exclusão lógica (soft delete). Apenas admin.
+
+export async function DELETE(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const userId   = req.headers.get("x-user-id");
+    const userRole = req.headers.get("x-user-role");
+    if (!userId)            return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    if (userRole !== "admin") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+
+    const { id } = await params;
+
+    try {
+        const ticketId = BigInt(id);
+        const ticket = await prisma.suporteTicket.findUnique({ where: { id: ticketId } });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (!ticket || (ticket as any).deleted_at) {
+            return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
+        }
+
+        await (prisma.suporteTicket as any).update({
+            where: { id: ticketId },
+            data: {
+                deleted_at: new Date(),
+                deleted_by: BigInt(userId),
+            },
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("Erro ao excluir ticket:", error);
         return NextResponse.json({ error: "Erro interno" }, { status: 500 });
     }
 }

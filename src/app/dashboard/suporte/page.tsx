@@ -20,6 +20,7 @@ import {
     Image,
     Link2,
     Ticket,
+    Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -445,6 +446,25 @@ export default function SuportePage() {
 
     const hasFilters = !!(filterStatus || filterPrioridade || filterTipo || filterUser || filterDateFrom || filterDateTo);
 
+    const [confirmDelete, setConfirmDelete] = useState<{ id: string; ticket_number: string } | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        if (!confirmDelete) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/suporte/${confirmDelete.id}`, { method: "DELETE" });
+            if (res.ok) {
+                setTickets(prev => prev.filter(t => t.id !== confirmDelete.id));
+                setConfirmDelete(null);
+            }
+        } catch (err) {
+            console.error("Erro ao excluir ticket:", err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const handleTicketCreated = (ticket: TicketItem) => {
         setShowModal(false);
         // Navega direto para o detalhe
@@ -569,6 +589,7 @@ export default function SuportePage() {
                                             <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Criado por</th>
                                         )}
                                         <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Data</th>
+                                        {admin && <th className="w-10" />}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -616,6 +637,17 @@ export default function SuportePage() {
                                                         {format(new Date(t.created_at), "dd/MM/yyyy", { locale: ptBR })}
                                                     </span>
                                                 </td>
+                                                {admin && (
+                                                    <td className="px-3 py-4" onClick={e => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => setConfirmDelete({ id: t.id, ticket_number: t.ticket_number })}
+                                                            className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                                            title="Excluir ticket"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })}
@@ -653,6 +685,43 @@ export default function SuportePage() {
                     </>
                 )}
             </div>
+
+            {/* Modal de confirmação de exclusão */}
+            {confirmDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl mx-4">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center shrink-0">
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-white">Excluir ticket</h3>
+                                <p className="text-xs text-slate-400 font-mono">{confirmDelete.ticket_number}</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-slate-300 mb-6">
+                            Tem certeza que deseja excluir este chamado? O registro será preservado no banco de dados, mas não ficará mais visível.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirmDelete(null)}
+                                disabled={deleting}
+                                className="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 text-sm transition-all disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="flex-1 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de criação */}
             {showModal && (

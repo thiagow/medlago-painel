@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = {};
+        const where: any = { deleted_at: null };
 
         // RBAC: atendentes só veem seus próprios tickets
         if (!isAdmin) {

@@ -22,6 +22,7 @@ import {
     RefreshCw,
     User,
     Shield,
+    Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -115,6 +116,8 @@ export default function SuporteDetalhe({ params }: { params: Promise<{ id: strin
     const [sending, setSending]         = useState(false);
     const [sendError, setSendError]     = useState("");
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting]       = useState(false);
 
     const fetchTicket = useCallback(async () => {
         try {
@@ -193,6 +196,20 @@ export default function SuporteDetalhe({ params }: { params: Promise<{ id: strin
         }
     };
 
+    const handleDeleteTicket = async () => {
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/suporte/${id}`, { method: "DELETE" });
+            if (res.ok) {
+                router.push("/dashboard/suporte");
+            }
+        } catch (err) {
+            console.error("Erro ao excluir ticket:", err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     // ── Render ──────────────────────────────────────────────────────────────────
 
     if (loading) {
@@ -224,13 +241,24 @@ export default function SuporteDetalhe({ params }: { params: Promise<{ id: strin
     return (
         <div className="p-6 md:p-8 max-w-5xl mx-auto w-full overflow-y-auto h-full">
 
-            {/* Voltar */}
-            <button
-                onClick={() => router.push("/dashboard/suporte")}
-                className="flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-6 transition-colors"
-            >
-                <ArrowLeft className="w-4 h-4" /> Voltar para Suporte
-            </button>
+            {/* Voltar + Excluir (admin) */}
+            <div className="flex items-center justify-between mb-6">
+                <button
+                    onClick={() => router.push("/dashboard/suporte")}
+                    className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Voltar para Suporte
+                </button>
+                {admin && (
+                    <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 text-xs transition-all"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Excluir ticket
+                    </button>
+                )}
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -459,6 +487,43 @@ export default function SuporteDetalhe({ params }: { params: Promise<{ id: strin
                     )}
                 </div>
             </div>
+
+            {/* Modal de confirmação de exclusão */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl mx-4">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center shrink-0">
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-white">Excluir ticket</h3>
+                                <p className="text-xs text-slate-400 font-mono">{ticket.ticket_number}</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-slate-300 mb-6">
+                            Tem certeza que deseja excluir este chamado? O registro será preservado no banco de dados, mas não ficará mais visível.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={deleting}
+                                className="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 text-sm transition-all disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDeleteTicket}
+                                disabled={deleting}
+                                className="flex-1 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Lightbox */}
             {lightboxSrc && (
