@@ -22,11 +22,11 @@ import {
     Key,
     Tag,
     Star,
-    BarChart3,
     TrendingUp,
     Eraser,
-    FileSearch,
     LifeBuoy,
+    Headphones,
+    Radio,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -38,8 +38,8 @@ export default function DashboardLayout({
     const router = useRouter();
     const pathname = usePathname();
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [analysisOpen, setAnalysisOpen] = useState(false);
-    const [logsOpen, setLogsOpen] = useState(false);
+    const [atendimentoOpen, setAtendimentoOpen] = useState(false);
+    const [comunicacaoOpen, setComunicacaoOpen] = useState(false);
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
     useEffect(() => {
@@ -48,22 +48,30 @@ export default function DashboardLayout({
         }
     }, [user, loading, router]);
 
-    // Open settings menu automatically if on a settings page
+    // Auto-expand submenus ao navegar direto para uma sub-rota
     useEffect(() => {
         if (
-            pathname.startsWith("/dashboard/departments") || 
-            pathname.startsWith("/dashboard/external-contacts") || 
-            pathname.startsWith("/dashboard/tags") || 
-            pathname.startsWith("/dashboard/nps/config") ||
-            pathname.startsWith("/dashboard/users")
+            pathname.startsWith("/dashboard/history") ||
+            pathname.startsWith("/dashboard/agendamentos") ||
+            pathname.startsWith("/dashboard/patients")
+        ) {
+            setAtendimentoOpen(true);
+        }
+        if (
+            pathname.startsWith("/dashboard/broadcasts") ||
+            pathname.startsWith("/dashboard/nps")
+        ) {
+            setComunicacaoOpen(true);
+        }
+        if (
+            pathname.startsWith("/dashboard/departments") ||
+            pathname.startsWith("/dashboard/external-contacts") ||
+            pathname.startsWith("/dashboard/tags") ||
+            pathname.startsWith("/dashboard/users") ||
+            pathname.startsWith("/dashboard/analysis") ||
+            pathname.startsWith("/dashboard/logs")
         ) {
             setSettingsOpen(true);
-        }
-        if (pathname.startsWith("/dashboard/analysis")) {
-            setAnalysisOpen(true);
-        }
-        if (pathname.startsWith("/dashboard/logs")) {
-            setLogsOpen(true);
         }
     }, [pathname]);
 
@@ -75,127 +83,59 @@ export default function DashboardLayout({
         );
     }
 
-    const navItems = [
-        {
-            href: "/dashboard",
-            icon: LayoutDashboard,
-            label: "Visão Geral",
-            id: "nav-overview",
-        },
-        {
-            href: "/dashboard/conversations",
-            icon: MessageSquare,
-            label: "Conversas",
-            id: "nav-conversations",
-        },
-        {
-            href: "/dashboard/history",
-            icon: Clock,
-            label: "Histórico",
-            id: "nav-history",
-        },
-        {
-            href: "/dashboard/agendamentos",
-            icon: CalendarDays,
-            label: "Agendamentos",
-            id: "nav-agendamentos",
-        },
-        {
-            href: "/dashboard/patients",
-            icon: Users, // Pode usar Múltiplos ou Contact (importarei se necessário)
-            label: "Pacientes",
-            id: "nav-patients",
-        },
-        ...((isAdmin() || user?.role === "atendente")
-            ? [
-                {
-                    href: "/dashboard/broadcasts",
-                    icon: Send,
-                    label: "Disparos",
-                    id: "nav-broadcasts",
-                },
-            ]
-            : []),
-        ...(isAdmin()
-            ? [
-                {
-                    href: "/dashboard/nps",
-                    icon: Star,
-                    label: "Avaliações NPS",
-                    id: "nav-nps",
-                },
-            ]
-            : []),
-        {
-            href: "/dashboard/suporte",
-            icon: LifeBuoy,
-            label: "Suporte",
-            id: "nav-suporte",
-        },
+    const admin = isAdmin();
+
+    // ── Itens do submenu Atendimento ─────────────────────────────────────────
+    const atendimentoItems = [
+        { href: "/dashboard/history",      icon: Clock,        label: "Histórico",     id: "nav-history" },
+        { href: "/dashboard/agendamentos", icon: CalendarDays, label: "Agendamentos",  id: "nav-agendamentos" },
+        { href: "/dashboard/patients",     icon: Users,        label: "Pacientes",     id: "nav-patients" },
     ];
 
+    // ── Itens do submenu Comunicação ─────────────────────────────────────────
+    const comunicacaoItems = [
+        { href: "/dashboard/broadcasts", icon: Send, label: "Disparos", id: "nav-broadcasts" },
+        ...(admin
+            ? [{ href: "/dashboard/nps", icon: Star, label: "Avaliações NPS", id: "nav-nps" }]
+            : []),
+    ];
+
+    // ── Itens do submenu Configurações (admin) ───────────────────────────────
     const settingsItems = [
-        {
-            href: "/dashboard/departments",
-            icon: Building2,
-            label: "Departamentos",
-            id: "nav-departments",
-        },
-        {
-            href: "/dashboard/external-contacts",
-            icon: Phone,
-            label: "Contatos Externos",
-            id: "nav-external-contacts",
-        },
-        {
-            href: "/dashboard/tags",
-            icon: Tag,
-            label: "Tags de Atendimento",
-            id: "nav-tags",
-        },
-        ...(isAdmin()
-            ? [
-                {
-                    href: "/dashboard/users",
-                    icon: Users,
-                    label: "Usuários",
-                    id: "nav-users",
-                },
-                {
-                    href: "/dashboard/nps/config",
-                    icon: Settings,
-                    label: "Config. NPS",
-                    id: "nav-nps-config",
-                },
-            ]
-            : []),
+        { href: "/dashboard/users",                    icon: Users,     label: "Usuários",            id: "nav-users" },
+        { href: "/dashboard/departments",              icon: Building2, label: "Departamentos",        id: "nav-departments" },
+        { href: "/dashboard/tags",                     icon: Tag,       label: "Tags de Atendimento",  id: "nav-tags" },
+        { href: "/dashboard/external-contacts",        icon: Phone,     label: "Contatos Externos",    id: "nav-external-contacts" },
+        { href: "/dashboard/nps/config",               icon: Settings,  label: "Config. NPS",          id: "nav-nps-config" },
+        { href: "/dashboard/analysis/ai-transfers",    icon: TrendingUp, label: "Análise IA",          id: "nav-analysis-ai" },
+        { href: "/dashboard/logs/deleted-messages",    icon: Eraser,    label: "Mensagens Apagadas",   id: "nav-logs-deleted-messages" },
     ];
 
-    const analysisItems = [
-        ...(isAdmin()
-            ? [
-                {
-                    href: "/dashboard/analysis/ai-transfers",
-                    icon: TrendingUp,
-                    label: "Atendimento IA",
-                    id: "nav-analysis-ai",
-                },
-            ]
-            : []),
-    ];
+    // Helper de active state
+    const isActive = (href: string) =>
+        pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
-    const logItems = [
-        ...(isAdmin()
-            ? [
-                {
-                    href: "/dashboard/logs/deleted-messages",
-                    icon: Eraser,
-                    label: "Mensagens Apagadas",
-                    id: "nav-logs-deleted-messages",
-                },
-            ]
-            : []),
-    ];
+    const isGroupActive = (paths: string[]) => paths.some(p => pathname.startsWith(p));
+
+    // ── Classes reutilizáveis ────────────────────────────────────────────────
+    const linkCls = (active: boolean) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${
+            active
+                ? "bg-blue-600/20 text-blue-400 font-medium"
+                : "text-slate-400 hover:text-white hover:bg-slate-800"
+        }`;
+
+    const subLinkCls = (active: boolean) =>
+        `flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-sm ${
+            active
+                ? "bg-violet-600/20 text-violet-400 font-medium"
+                : "text-slate-400 hover:text-white hover:bg-slate-800"
+        }`;
+
+    const groupBtnCls = (open: boolean, groupActive: boolean) =>
+        `w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${
+            open || groupActive ? "text-slate-200 bg-slate-800" : "text-slate-400 hover:text-white hover:bg-slate-800"
+        }`;
 
     return (
         <div className="flex h-screen bg-slate-950 overflow-hidden">
@@ -211,56 +151,86 @@ export default function DashboardLayout({
 
                 {/* Navigation */}
                 <nav className="flex-1 p-2 md:p-4 space-y-1 overflow-y-auto">
-                    {navItems.map(({ href, icon: Icon, label, id }) => {
-                        const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
-                        return (
-                            <Link
-                                key={href}
-                                id={id}
-                                href={href}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${isActive
-                                    ? "bg-blue-600/20 text-blue-400 font-medium"
-                                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                                    }`}
-                            >
-                                <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-blue-400" : "text-slate-400 group-hover:text-white"}`} />
-                                <span className="hidden md:block text-sm">{label}</span>
-                            </Link>
-                        );
-                    })}
 
-                    {/* Análises (admin only) */}
-                    {isAdmin() && analysisItems.length > 0 && (
+                    {/* Painel — admin only */}
+                    {admin && (
+                        <Link
+                            id="nav-overview"
+                            href="/dashboard"
+                            className={linkCls(pathname === "/dashboard")}
+                        >
+                            <LayoutDashboard className={`w-5 h-5 shrink-0 ${pathname === "/dashboard" ? "text-blue-400" : "text-slate-400 group-hover:text-white"}`} />
+                            <span className="hidden md:block text-sm">Painel</span>
+                        </Link>
+                    )}
+
+                    {/* Conversas — todos */}
+                    <Link
+                        id="nav-conversations"
+                        href="/dashboard/conversations"
+                        className={linkCls(isActive("/dashboard/conversations"))}
+                    >
+                        <MessageSquare className={`w-5 h-5 shrink-0 ${isActive("/dashboard/conversations") ? "text-blue-400" : "text-slate-400 group-hover:text-white"}`} />
+                        <span className="hidden md:block text-sm">Conversas</span>
+                    </Link>
+
+                    {/* ── Atendimento (submenu) ── */}
+                    <div>
+                        <button
+                            id="nav-atendimento"
+                            onClick={() => setAtendimentoOpen(v => !v)}
+                            className={groupBtnCls(atendimentoOpen, isGroupActive(["/dashboard/history", "/dashboard/agendamentos", "/dashboard/patients"]))}
+                        >
+                            <Headphones className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
+                            <span className="hidden md:flex flex-1 items-center justify-between text-sm">
+                                Atendimento
+                                {atendimentoOpen
+                                    ? <ChevronDown className="w-4 h-4 text-slate-400" />
+                                    : <ChevronRight className="w-4 h-4 text-slate-400" />
+                                }
+                            </span>
+                        </button>
+
+                        {atendimentoOpen && (
+                            <div className="hidden md:block mt-1 ml-3 pl-3 border-l border-slate-700 space-y-1">
+                                {atendimentoItems.map(({ href, icon: Icon, label, id }) => {
+                                    const active = isActive(href);
+                                    return (
+                                        <Link key={href} id={id} href={href} className={subLinkCls(active)}>
+                                            <Icon className={`w-4 h-4 shrink-0 ${active ? "text-violet-400" : ""}`} />
+                                            {label}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Comunicação (submenu) — admin + atendente ── */}
+                    {(admin || user?.role === "atendente") && (
                         <div>
                             <button
-                                id="nav-analysis"
-                                onClick={() => setAnalysisOpen(!analysisOpen)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${analysisOpen ? "text-slate-200 bg-slate-800" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                id="nav-comunicacao"
+                                onClick={() => setComunicacaoOpen(v => !v)}
+                                className={groupBtnCls(comunicacaoOpen, isGroupActive(["/dashboard/broadcasts", "/dashboard/nps"]))}
                             >
-                                <BarChart3 className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
+                                <Radio className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
                                 <span className="hidden md:flex flex-1 items-center justify-between text-sm">
-                                    Análises
-                                    {analysisOpen
+                                    Comunicação
+                                    {comunicacaoOpen
                                         ? <ChevronDown className="w-4 h-4 text-slate-400" />
                                         : <ChevronRight className="w-4 h-4 text-slate-400" />
                                     }
                                 </span>
                             </button>
 
-                            {analysisOpen && (
+                            {comunicacaoOpen && (
                                 <div className="hidden md:block mt-1 ml-3 pl-3 border-l border-slate-700 space-y-1">
-                                    {analysisItems.map(({ href, icon: Icon, label, id }) => {
-                                        const isActive = pathname.startsWith(href);
+                                    {comunicacaoItems.map(({ href, icon: Icon, label, id }) => {
+                                        const active = isActive(href);
                                         return (
-                                            <Link
-                                                key={href}
-                                                id={id}
-                                                href={href}
-                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-sm ${isActive
-                                                    ? "bg-rose-600/20 text-rose-400 font-medium"
-                                                    : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-                                            >
-                                                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-rose-400" : ""}`} />
+                                            <Link key={href} id={id} href={href} className={subLinkCls(active)}>
+                                                <Icon className={`w-4 h-4 shrink-0 ${active ? "text-violet-400" : ""}`} />
                                                 {label}
                                             </Link>
                                         );
@@ -270,54 +240,17 @@ export default function DashboardLayout({
                         </div>
                     )}
 
-                    {/* Logs (admin only) */}
-                    {isAdmin() && logItems.length > 0 && (
-                        <div>
-                            <button
-                                id="nav-logs"
-                                onClick={() => setLogsOpen(!logsOpen)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${logsOpen ? "text-slate-200 bg-slate-800" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-                            >
-                                <FileSearch className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
-                                <span className="hidden md:flex flex-1 items-center justify-between text-sm">
-                                    Logs
-                                    {logsOpen
-                                        ? <ChevronDown className="w-4 h-4 text-slate-400" />
-                                        : <ChevronRight className="w-4 h-4 text-slate-400" />
-                                    }
-                                </span>
-                            </button>
-
-                            {logsOpen && (
-                                <div className="hidden md:block mt-1 ml-3 pl-3 border-l border-slate-700 space-y-1">
-                                    {logItems.map(({ href, icon: Icon, label, id }) => {
-                                        const isActive = pathname.startsWith(href);
-                                        return (
-                                            <Link
-                                                key={href}
-                                                id={id}
-                                                href={href}
-                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-sm ${isActive
-                                                    ? "bg-amber-600/20 text-amber-500 font-medium"
-                                                    : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-                                            >
-                                                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-amber-500" : ""}`} />
-                                                {label}
-                                            </Link>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Configurações (admin only) */}
-                    {isAdmin() && (
+                    {/* ── Configurações (submenu, admin only) ── */}
+                    {admin && (
                         <div>
                             <button
                                 id="nav-settings"
-                                onClick={() => setSettingsOpen(!settingsOpen)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${settingsOpen ? "text-slate-200 bg-slate-800" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+                                onClick={() => setSettingsOpen(v => !v)}
+                                className={groupBtnCls(settingsOpen, isGroupActive([
+                                    "/dashboard/departments", "/dashboard/external-contacts",
+                                    "/dashboard/tags", "/dashboard/users",
+                                    "/dashboard/analysis", "/dashboard/logs",
+                                ]))}
                             >
                                 <Settings className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
                                 <span className="hidden md:flex flex-1 items-center justify-between text-sm">
@@ -332,17 +265,10 @@ export default function DashboardLayout({
                             {settingsOpen && (
                                 <div className="hidden md:block mt-1 ml-3 pl-3 border-l border-slate-700 space-y-1">
                                     {settingsItems.map(({ href, icon: Icon, label, id }) => {
-                                        const isActive = pathname.startsWith(href);
+                                        const active = isActive(href);
                                         return (
-                                            <Link
-                                                key={href}
-                                                id={id}
-                                                href={href}
-                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-sm ${isActive
-                                                    ? "bg-violet-600/20 text-violet-400 font-medium"
-                                                    : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-                                            >
-                                                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-violet-400" : ""}`} />
+                                            <Link key={href} id={id} href={href} className={subLinkCls(active)}>
+                                                <Icon className={`w-4 h-4 shrink-0 ${active ? "text-violet-400" : ""}`} />
                                                 {label}
                                             </Link>
                                         );
@@ -351,6 +277,16 @@ export default function DashboardLayout({
                             )}
                         </div>
                     )}
+
+                    {/* Suporte — todos */}
+                    <Link
+                        id="nav-suporte"
+                        href="/dashboard/suporte"
+                        className={linkCls(isActive("/dashboard/suporte"))}
+                    >
+                        <LifeBuoy className={`w-5 h-5 shrink-0 ${isActive("/dashboard/suporte") ? "text-blue-400" : "text-slate-400 group-hover:text-white"}`} />
+                        <span className="hidden md:block text-sm">Suporte</span>
+                    </Link>
                 </nav>
 
                 {/* User info + logout */}
@@ -387,9 +323,9 @@ export default function DashboardLayout({
                 {children}
             </main>
 
-            <UpdatePasswordModal 
-                isOpen={passwordModalOpen} 
-                onClose={() => setPasswordModalOpen(false)} 
+            <UpdatePasswordModal
+                isOpen={passwordModalOpen}
+                onClose={() => setPasswordModalOpen(false)}
             />
         </div>
     );
